@@ -87,12 +87,12 @@ ROS 2 Control
 **Main State Machine**
 ```
 balance
- ├─ drive_forward / drive_backward
- ├─ jump (crouch → thrust → flight → land)
- ├─ step_up (approach → lift → place → push up → land)
- ├─ step_down (approach → descend → land)
- ├─ height_adjust (low/mid/high stance)
- └─ fall_recover (detect fall → posture adjust → stand up)
+ ├─ drive_forward / drive_backward [Wheel]
+ ├─ jump (crouch → thrust → flight → land) [Wheel + Leg]
+ ├─ step_up (approach → lift → place → push up → land) [Wheel + Leg]
+ ├─ step_down (approach → descend → land) [Wheel + Leg]
+ ├─ height_adjust (low/mid/high stance) [Leg]
+ └─ fall_recover (detect fall → posture adjust → stand up) [Wheel + Leg]
 ```
 
 ---
