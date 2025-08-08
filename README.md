@@ -62,7 +62,7 @@ ROS 2 Control
 
 ## 3) State Estimation
 **Input Sensor**
-- IMU: D435i IMU + BNO055  
+- IMU: D435i + BNO055  
 - Absolute encoders (AS5048A) ทุก joint  
 - (Optional) VIO: VINS-Mono/VINS-Fusion  
 
