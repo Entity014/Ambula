@@ -112,10 +112,9 @@ StepInfo: {riser_mean, tread_mean, n_steps, confidence}
 ---
 
 ## 6) Safety & Operations
-- Wireless E-Stop → `/safety/stop`  
+- Wireless E-Stop → `/safety/stop`  (Emergency stop interrupt ทุก state)
 - Watchdog: monitor pitch/yaw_rate, torque, encoder fault, contact loss  
-- Emergency stop interrupt ทุก state  
-- Logger: เก็บข้อมูล IMU, odometry, torque  
+- (Optional) Logger: เก็บข้อมูล IMU, odometry, torque  
 
 ---
 
