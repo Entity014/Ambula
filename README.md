@@ -1,22 +1,38 @@
-# 2-Leg Wheel Robot Workflow (No Navigation, With Simulation & RL)
+# 2-Leg Wheel Robot Workflow (With Simulation & RL)
 
 ## 1) Low-Level Control & Drivers
+
 **Architecture**
 ```
-ROS 2 Control → Teensy (CAN Master) → ODrive (CAN Slave) → BLDC Motors
-                          │
-                          └── Servo Waist (PWM/Serial)
+ROS 2 Control
+   │
+   └── Teensy (CAN Master + SPI Master)
+         │
+         ├── Waist: Servo 360° ← PWM
+         │        └── AS5048A (SPI)
+         │
+         ├── Hip: BLDC ← CAN → ODrive → FOC
+         │      └── AS5048A (SPI)
+         │
+         ├── Knee: BLDC ← CAN → ODrive → FOC
+         │       └── AS5048A (SPI)
+         │
+         └── Wheel: BLDC ← CAN → ODrive → FOC
+                 └── AS5048A (SPI)
 ```
-- **Teensy**: Interface ระหว่าง ROS 2 Control และ ODrive, รวมถึงควบคุม Servo
-- **ODrive**: รับคำสั่งจาก Teensy ผ่าน CAN bus → คุม BLDC แบบ FOC
 
 **Joint & Control Mode**
-| Joint   | Motor Type | Control Mode                    | เหตุผล |
-|---------|-----------|----------------------------------|--------|
-| Waist   | Servo     | Position Control (Absolute)      | หมุนเอว, ไม่ต้องการแรงสูง |
-| Hip     | BLDC      | Position Control (Cascaded)      | Outer pos loop → inner vel/current loop |
-| Knee    | BLDC      | Position Control (Cascaded)      | เหมือน Hip |
-| Wheel   | BLDC      | Torque Control (FOC)             | สำหรับ balancing & drive |
+| Joint   | Motor Type     | Control Mode               | Feedback Sensor |
+|---------|---------------|----------------------------|-----------------|
+| Waist   | Servo 360°     | Position Control (Absolute)| AS5048A         |
+| Hip     | BLDC (ODrive)  | Position Control (Cascaded)| AS5048A         |
+| Knee    | BLDC (ODrive)  | Position Control (Cascaded)| AS5048A         |
+| Wheel   | BLDC (ODrive)  | Torque Control (FOC)       | AS5048A         |
+
+**Reason for AS5048A on all joints**
+- Absolute encoder → no homing needed, no drift
+- High resolution (~0.0219°/step)
+- SPI interface → low latency
 
 **ROS 2 Control Mapping**
 ```yaml
@@ -30,18 +46,19 @@ joints:
 ---
 
 ## 2) State Estimation
+
 **Input Sensor**
 - IMU: D435i IMU + BNO055
-- Wheel Encoders
+- Absolute encoders (AS5048A) on all joints
 - (Optional) VIO: VINS-Mono/VINS-Fusion
 
 **Processing**
 - Mahony / nonlinear complementary filter → roll, pitch, yaw, yaw_rate
 - Encoder + IMU → linear velocity
-- VINS → ลด drift ของ odometry
-- Contact detection → จาก encoder/current/IMU shock detection
+- VINS → reduce odometry drift
+- Contact detection via encoder/current/IMU shock
 
-**Output (State Vector ตัวอย่าง)**
+**Output (State Vector Example)**
 ```
 [pitch, pitch_rate, linear_velocity, yaw_rate, height, contact_state]
 ```
@@ -49,11 +66,12 @@ joints:
 ---
 
 ## 3) Balancing & Motion Control
-**Controller**
-- LQR สำหรับ balance & drive
-- MPPI (information-theoretic MPC) สำหรับ nonlinear dynamics
 
-**State Machine หลัก**
+**Controller**
+- LQR: balance & drive
+- MPPI: nonlinear dynamics handling
+
+**Main State Machine**
 ```
 balance
  ├─ drive_forward / drive_backward
@@ -67,11 +85,12 @@ balance
 ---
 
 ## 4) Perception (Obstacle / Stair Detection)
-**Goal:** ตรวจจับบันได/อุปสรรคเพื่อปรับความสูงหรือเปลี่ยนโหมดการเคลื่อนที่
+
+**Goal:** Detect stairs/obstacles → adjust height or change motion mode
 
 **Methods**
-1. Geometric: Depth/LiDAR → RANSAC ground removal → normal clustering → riser/tread
-2. Deep Learning: StairNet-RGBD → segmentation tread/riser → step parameters
+1. **Geometric:** Depth/LiDAR → voxel downsample → ROI crop → RANSAC ground removal → normal clustering → riser/tread
+2. **Deep Learning:** StairNet-RGBD → tread/riser segmentation → post-process step parameters
 
 **Output**
 ```
@@ -82,24 +101,25 @@ StepInfo: {riser_mean, tread_mean, n_steps, confidence}
 
 ## 5) Safety & Operations
 - Wireless E-Stop → `/safety/stop`
-- Watchdog → monitor pitch/yaw_rate, torque, encoder fault
-- Emergency stop interrupt ทุก state
-- Logger → เก็บข้อมูลเพื่อตรวจสอบและปรับ controller
+- Watchdog: monitor pitch/yaw_rate, torque, encoder fault, contact loss
+- Emergency stop interrupts any state
+- Logger: store IMU, odometry, torque for system ID & tuning
 
 ---
 
 ## 6) Simulation & RL
+
 **Simulator**
 - MuJoCo / IsaacLab
 
 **Training**
 - PPO baseline: balance, drive, jump, step_up, fall_recover
-- RMA: ปรับตัวในโลกจริง
+- Rapid Motor Adaptation (RMA): real-world adaptation
 - Domain Randomization: mass, friction, latency, sensor noise
 
 **Integration**
-- Export RL policy เป็น ROS 2 node
-- ผนวก policy เข้ากับ Balancer/State Machine
+- Export RL policy as ROS 2 node
+- Integrate with Balancer/State Machine (hybrid control)
 
 ---
 
