@@ -1,7 +1,36 @@
-# 2-Leg Wheel Robot Workflow (With Simulation & RL)
+# 2-Leg Wheel Robot Workflow (With Simulation, Networking & QoS)
 
-## 1) Low-Level Control & Drivers
+## 1) Networking & Communication
+**Topology**
+```
+           ┌─────────────── Laptop / Dev PC (Wi-Fi)
+           │                     ↑
+           │                 (ROS 2 peer)
+           │                     │
+        ┌──┴───────────── Wi-Fi AP/Router
+        │
+   ┌────┴───────┐     ┌────────────────┐
+   │  Switch    │────▶│  Pi-A (Perception/VIO) ── USB3 ── D435i
+   │ (GigE)     │◀────│   + Wi-Fi uplink to PC  │
+   └────┬───────┘     └────────────────┘
+        │
+        └────────────── Pi-B (Control/Estimator/Safety) ── CAN ── Teensy ── ODrive/Servo
+                                         │
+                                         └─ SPI ── AS5048A (ทุก joint)
+```
 
+**Roles**
+- **Pi-A:** Perception pipeline + (optional) VINS-Fusion, ส่ง StepInfo/Odom → Pi-B  
+- **Pi-B:** State Estimator, Balancer, Motion Control, Safety, ROS 2 Control bridge → Teensy/ODrive  
+- **PC:** Monitoring, teleop, logging (รับข้อมูลเฉพาะจำเป็นผ่าน Wi-Fi)
+
+**Time Sync**
+- ใช้ `chrony` sync เวลา  
+- ถ้าต้องการ <1 ms jitter → ใช้ PTP (IEEE-1588)
+
+---
+
+## 2) Low-Level Control & Drivers
 **Architecture**
 ```
 ROS 2 Control
@@ -29,34 +58,19 @@ ROS 2 Control
 | Knee    | BLDC (ODrive)  | Position Control (Cascaded)| AS5048A         |
 | Wheel   | BLDC (ODrive)  | Torque Control (FOC)       | AS5048A         |
 
-**Reason for AS5048A on all joints**
-- Absolute encoder → no homing needed, no drift
-- High resolution (~0.0219°/step)
-- SPI interface → low latency
-
-**ROS 2 Control Mapping**
-```yaml
-joints:
-  - waist_joint: position
-  - hip_joint:   position
-  - knee_joint:  position
-  - wheel_joint: effort
-```
-
 ---
 
-## 2) State Estimation
-
+## 3) State Estimation
 **Input Sensor**
 - IMU: D435i IMU + BNO055
-- Absolute encoders (AS5048A) on all joints
+- Absolute encoders (AS5048A) ทุก joint
 - (Optional) VIO: VINS-Mono/VINS-Fusion
 
 **Processing**
 - Mahony / nonlinear complementary filter → roll, pitch, yaw, yaw_rate
 - Encoder + IMU → linear velocity
-- VINS → reduce odometry drift
-- Contact detection via encoder/current/IMU shock
+- VINS → ลด drift ของ odometry
+- Contact detection
 
 **Output (State Vector Example)**
 ```
@@ -65,8 +79,7 @@ joints:
 
 ---
 
-## 3) Balancing & Motion Control
-
+## 4) Balancing & Motion Control
 **Controller**
 - LQR: balance & drive
 - MPPI: nonlinear dynamics handling
@@ -84,8 +97,7 @@ balance
 
 ---
 
-## 4) Perception (Obstacle / Stair Detection)
-
+## 5) Perception (Obstacle / Stair Detection)
 **Goal:** Detect stairs/obstacles → adjust height or change motion mode
 
 **Methods**
@@ -99,16 +111,15 @@ StepInfo: {riser_mean, tread_mean, n_steps, confidence}
 
 ---
 
-## 5) Safety & Operations
+## 6) Safety & Operations
 - Wireless E-Stop → `/safety/stop`
 - Watchdog: monitor pitch/yaw_rate, torque, encoder fault, contact loss
 - Emergency stop interrupts any state
-- Logger: store IMU, odometry, torque for system ID & tuning
+- Logger: store IMU, odometry, torque
 
 ---
 
-## 6) Simulation & RL
-
+## 7) Simulation & RL
 **Simulator**
 - MuJoCo / IsaacLab
 
@@ -119,11 +130,11 @@ StepInfo: {riser_mean, tread_mean, n_steps, confidence}
 
 **Integration**
 - Export RL policy as ROS 2 node
-- Integrate with Balancer/State Machine (hybrid control)
+- Integrate with Balancer/State Machine
 
 ---
 
-## 7) ROS 2 Workspace Structure
+## 8) ROS 2 Workspace Structure
 ```
 ambula_ws/src/
   ambula_hw/                # Teensy/ODrive driver
@@ -137,12 +148,25 @@ ambula_ws/src/
 
 ---
 
-## 8) Data Flow
+## 9) Data Flow
 ```
 IMU + Encoders ──> State Estimator ──┐
 Depth/LiDAR  ──> Perception          │
-                                      ├─> Balancer / State Machine (balance/drive/jump/step_up/step_down/height_adjust/fall_recover)
+                                      ├─> Balancer / State Machine
 Simulation + RL <────────────────────┘
                                       ├─> ROS 2 Control ──> Teensy ──> ODrive ──> Motors/Servo
 Safety (E-Stop, Watchdog) ────────────┘
 ```
+
+---
+
+## 10) ROS 2/DDS: QoS & Traffic Profile
+**QoS Recommendations**
+- **Sensor topics:** `BEST_EFFORT`, `KEEP_LAST`, depth=5–10
+- **Control commands:** `RELIABLE`, `KEEP_LAST`, depth=10
+- **State/Status:** `RELIABLE`, depth=5
+
+**Traffic Optimization**
+- ใช้ `image_transport` แบบ compressed สำหรับภาพบน Wi-Fi
+- จำกัด heavy topics ผ่าน Wi-Fi, เก็บดิบใน Pi
+- ใช้ Cyclone DDS หรือ Fast DDS, multicast discovery ใน LAN
