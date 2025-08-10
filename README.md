@@ -209,17 +209,17 @@ StepInfo: {riser_mean, tread_mean, n_steps, confidence}
 ```
 ambula_ws/
   src/
+    ambula_bringup/            # launch + params + compose scenarios
+    ambula_controller/         # LQR/MPPI/RL + state machine
     ambula_hw/                 # hardware interface + bridges
       ambula_fw/               # PlatformIO firmware สำหรับ Teensy
-    ambula_balancer/           # LQR/MPPI/RL + state machine
-    ambula_state_estimator/    # Mahony + VIO/VINS wrapper
     ambula_perception/         # stair/obstacle detection (RGB‑D/LiDAR)
-    ambula_safety/             # E‑Stop, watchdog, fault monitor
     ambula_rl/                 # RL training/inference + tools
-    ambula_bringup/            # launch + params + compose scenarios
+    ambula_safety/             # E‑Stop, watchdog, fault monitor
     ambula_simulation/
       ambula_description/      # URDF/Xacro + meshes
       ambula_world/            # Gazebo worlds/models
+    ambula_state_estimator/    # Mahony + VIO/VINS wrapper
 ```
 
 ---
