@@ -1,0 +1,59 @@
+[0.009s] Invoking command in '/home/robot_ws/build/ambula_world': CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH}:/opt/ros/jazzy /usr/bin/cmake /home/robot_ws/src/ambula_simulation/ambula_world -DCMAKE_INSTALL_PREFIX=/home/robot_ws/install/ambula_world
+[0.229s] -- The C compiler identification is GNU 13.3.0
+[0.359s] -- The CXX compiler identification is GNU 13.3.0
+[0.375s] -- Detecting C compiler ABI info
+[0.461s] -- Detecting C compiler ABI info - done
+[0.472s] -- Check for working C compiler: /usr/bin/cc - skipped
+[0.472s] -- Detecting C compile features
+[0.473s] -- Detecting C compile features - done
+[0.480s] -- Detecting CXX compiler ABI info
+[0.571s] -- Detecting CXX compiler ABI info - done
+[0.578s] -- Check for working CXX compiler: /usr/bin/c++ - skipped
+[0.578s] -- Detecting CXX compile features
+[0.578s] -- Detecting CXX compile features - done
+[0.582s] -- Found ament_cmake: 2.5.4 (/opt/ros/jazzy/share/ament_cmake/cmake)
+[0.724s] -- Found Python3: /usr/bin/python3 (found version "3.12.3") found components: Interpreter 
+[0.850s] -- Found rclcpp: 28.1.10 (/opt/ros/jazzy/share/rclcpp/cmake)
+[0.926s] -- Found rosidl_generator_c: 4.6.5 (/opt/ros/jazzy/share/rosidl_generator_c/cmake)
+[0.946s] -- Found rosidl_generator_cpp: 4.6.5 (/opt/ros/jazzy/share/rosidl_generator_cpp/cmake)
+[0.972s] -- Using all available rosidl_typesupport_c: rosidl_typesupport_fastrtps_c;rosidl_typesupport_introspection_c
+[0.999s] -- Using all available rosidl_typesupport_cpp: rosidl_typesupport_fastrtps_cpp;rosidl_typesupport_introspection_cpp
+[1.103s] -- Found rmw_implementation_cmake: 7.3.2 (/opt/ros/jazzy/share/rmw_implementation_cmake/cmake)
+[1.108s] -- Found rmw_cyclonedds_cpp: 2.2.3 (/opt/ros/jazzy/share/rmw_cyclonedds_cpp/cmake)
+[1.147s] -- Using RMW implementation 'rmw_cyclonedds_cpp' as default
+[1.225s] -- Found rclcpp_action: 28.1.10 (/opt/ros/jazzy/share/rclcpp_action/cmake)
+[1.277s] -- Found ament_lint_auto: 0.17.2 (/opt/ros/jazzy/share/ament_lint_auto/cmake)
+[1.373s] -- Added test 'lint_cmake' to check CMake code style
+[1.373s] -- Added test 'xmllint' to check XML markup files
+[1.375s] -- Configuring done (1.3s)
+[1.377s] -- Generating done (0.0s)
+[1.379s] -- Build files have been written to: /home/robot_ws/build/ambula_world
+[1.384s] Invoked command in '/home/robot_ws/build/ambula_world' returned '0': CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH}:/opt/ros/jazzy /usr/bin/cmake /home/robot_ws/src/ambula_simulation/ambula_world -DCMAKE_INSTALL_PREFIX=/home/robot_ws/install/ambula_world
+[1.385s] Invoking command in '/home/robot_ws/build/ambula_world': CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH}:/opt/ros/jazzy /usr/bin/cmake --build /home/robot_ws/build/ambula_world -- -j16 -l16
+[1.417s] Invoked command in '/home/robot_ws/build/ambula_world' returned '0': CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH}:/opt/ros/jazzy /usr/bin/cmake --build /home/robot_ws/build/ambula_world -- -j16 -l16
+[1.418s] Invoking command in '/home/robot_ws/build/ambula_world': CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH}:/opt/ros/jazzy /usr/bin/cmake --install /home/robot_ws/build/ambula_world
+[1.424s] -- Install configuration: ""
+[1.424s] -- Installing: /home/robot_ws/install/ambula_world/share/ambula_world//models
+[1.424s] -- Installing: /home/robot_ws/install/ambula_world/share/ambula_world//models/map1.stl
+[1.424s] -- Installing: /home/robot_ws/install/ambula_world/share/ambula_world//models/stair
+[1.424s] -- Installing: /home/robot_ws/install/ambula_world/share/ambula_world//models/stair/stair.dae
+[1.425s] -- Installing: /home/robot_ws/install/ambula_world/share/ambula_world//models/stair/model.sdf
+[1.425s] -- Installing: /home/robot_ws/install/ambula_world/share/ambula_world//models/stair/model.config
+[1.425s] -- Installing: /home/robot_ws/install/ambula_world/share/ambula_world//worlds
+[1.425s] -- Installing: /home/robot_ws/install/ambula_world/share/ambula_world//worlds/my_world.sdf
+[1.425s] -- Installing: /home/robot_ws/install/ambula_world/share/ament_index/resource_index/package_run_dependencies/ambula_world
+[1.425s] -- Installing: /home/robot_ws/install/ambula_world/share/ament_index/resource_index/parent_prefix_path/ambula_world
+[1.425s] -- Installing: /home/robot_ws/install/ambula_world/share/ambula_world/environment/ament_prefix_path.sh
+[1.425s] -- Installing: /home/robot_ws/install/ambula_world/share/ambula_world/environment/ament_prefix_path.dsv
+[1.426s] -- Installing: /home/robot_ws/install/ambula_world/share/ambula_world/environment/path.sh
+[1.426s] -- Installing: /home/robot_ws/install/ambula_world/share/ambula_world/environment/path.dsv
+[1.426s] -- Installing: /home/robot_ws/install/ambula_world/share/ambula_world/local_setup.bash
+[1.426s] -- Installing: /home/robot_ws/install/ambula_world/share/ambula_world/local_setup.sh
+[1.426s] -- Installing: /home/robot_ws/install/ambula_world/share/ambula_world/local_setup.zsh
+[1.426s] -- Installing: /home/robot_ws/install/ambula_world/share/ambula_world/local_setup.dsv
+[1.426s] -- Installing: /home/robot_ws/install/ambula_world/share/ambula_world/package.dsv
+[1.426s] -- Installing: /home/robot_ws/install/ambula_world/share/ament_index/resource_index/packages/ambula_world
+[1.426s] -- Installing: /home/robot_ws/install/ambula_world/share/ambula_world/cmake/ambula_worldConfig.cmake
+[1.427s] -- Installing: /home/robot_ws/install/ambula_world/share/ambula_world/cmake/ambula_worldConfig-version.cmake
+[1.427s] -- Installing: /home/robot_ws/install/ambula_world/share/ambula_world/package.xml
+[1.430s] Invoked command in '/home/robot_ws/build/ambula_world' returned '0': CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH}:/opt/ros/jazzy /usr/bin/cmake --install /home/robot_ws/build/ambula_world

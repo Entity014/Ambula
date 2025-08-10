@@ -28,9 +28,9 @@ services:
     extends: ambula_compose
     command: bash -c "source /home/.bashrc && ros2 launch foxglove_bridge foxglove_bridge_launch.xml"
 
-  # ambula_bring:
-  #   extends: ambula_compose
-  #   command: bash -c "source /home/.bashrc && ros2 launch ambula_description ambula_bringup.launch.py"
+  simulation_bringup:
+    extends: ambula_compose
+    command: bash -c "source /home/.bashrc && ros2 launch ambula_bringup simulation_bringup.launch.py"
 
   dev:
     extends:

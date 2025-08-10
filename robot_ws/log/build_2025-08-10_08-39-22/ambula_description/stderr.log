@@ -1,0 +1,6 @@
+[31mCMake Error at cmake_install.cmake:46 (file):
+  file INSTALL cannot find
+  "/home/robot_ws/src/ambula_simulation/ambula_description/meshs": No such
+  file or directory.
+
+[0m

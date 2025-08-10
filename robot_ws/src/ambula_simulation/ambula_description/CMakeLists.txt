@@ -7,9 +7,24 @@ endif()
 
 # find dependencies
 find_package(ament_cmake REQUIRED)
+find_package(rclcpp REQUIRED)
+find_package(rclcpp_action REQUIRED)
 # uncomment the following section in order to fill in
 # further dependencies manually.
 # find_package(<dependency> REQUIRED)
+
+set(THIS_PACKAGE_DEPENDS
+  ament_cmake
+  rclcpp
+  rclcpp_action
+)
+
+install(DIRECTORY
+  config
+  meshes
+  urdf
+  DESTINATION share/${PROJECT_NAME}/
+)
 
 if(BUILD_TESTING)
   find_package(ament_lint_auto REQUIRED)
