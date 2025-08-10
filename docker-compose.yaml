@@ -1,6 +1,6 @@
 services:
-  gazebo_compose:
-    image: gazebo
+  ambula_compose:
+    image: ambula
     build:
       context: .
       dockerfile: docker/Dockerfile.main
@@ -25,16 +25,16 @@ services:
       - ./robot_ws:/home/robot_ws:rw
 
   foxglove:
-    extends: gazebo_compose
+    extends: ambula_compose
     command: bash -c "source /home/.bashrc && ros2 launch foxglove_bridge foxglove_bridge_launch.xml"
 
-  # ambula_bring:
-  #   extends: gazebo_compose
-  #   command: bash -c "source /home/.bashrc && ros2 launch ambula_description ambula_bringup.launch.py"
+  simulation_bringup:
+    extends: ambula_compose
+    command: bash -c "source /home/.bashrc && ros2 launch ambula_bringup simulation_bringup.launch.py"
 
   dev:
     extends:
-      service: gazebo_compose
+      service: ambula_compose
     profiles:
       - dev
     restart: always
