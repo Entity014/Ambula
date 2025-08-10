@@ -1,4 +1,0 @@
-Invoking command in '/home/robot_ws/build/ambula_world': CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH}:/opt/ros/jazzy /usr/bin/cmake --build /home/robot_ws/build/ambula_world -- -j16 -l16
-Invoked command in '/home/robot_ws/build/ambula_world' returned '0': CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH}:/opt/ros/jazzy /usr/bin/cmake --build /home/robot_ws/build/ambula_world -- -j16 -l16
-Invoking command in '/home/robot_ws/build/ambula_world': CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH}:/opt/ros/jazzy /usr/bin/cmake --install /home/robot_ws/build/ambula_world
-Invoked command in '/home/robot_ws/build/ambula_world' returned '0': CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH}:/opt/ros/jazzy /usr/bin/cmake --install /home/robot_ws/build/ambula_world

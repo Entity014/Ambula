@@ -1,8 +1,0 @@
-source;share/ambula_hw/hook/cmake_prefix_path.ps1
-source;share/ambula_hw/hook/cmake_prefix_path.dsv
-source;share/ambula_hw/hook/cmake_prefix_path.sh
-source;share/ambula_hw/local_setup.bash
-source;share/ambula_hw/local_setup.dsv
-source;share/ambula_hw/local_setup.ps1
-source;share/ambula_hw/local_setup.sh
-source;share/ambula_hw/local_setup.zsh
