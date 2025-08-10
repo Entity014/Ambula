@@ -95,9 +95,9 @@ ROS 2 Control
 **Controller Architecture**
 
 ```
-        RGB-D Camera
-              │
-              ▼
+               RGB-D Camera
+                     │
+                     ▼
     ┌─────────────────────────────┐
     │   Perception (Obstacle /    │
     │   Stair Detection)          │
@@ -106,9 +106,9 @@ ROS 2 Control
     └─────────────────────────────┘
                      │ StepInfo (riser, tread, n_steps, conf.)
                      ▼
- Encoders          IMU
-    │               │
-    └───────┐   ┌───┘
+ Encoders           IMU
+    │                │
+    └───────┐   ┌────┘
             ▼   ▼
      ┌──────────────────┐
      │ State Estimation │
@@ -126,7 +126,7 @@ ROS 2 Control
      │ Controller       │
      └──────────────────┘
               │
-   ┌──────────┼──────────────────────────────────────────────────────────────┐
+   ┌──────────┼───────────────────────────────────────────────────────────────┐
    ▼          ▼                 ▼                    ▼                        ▼
 ┌─────────────┐ ┌────────────┐ ┌──────────────┐ ┌───────────────────┐ ┌─────────────────┐
 │ Stabilizing │ │ Jump       │ │ Step Up/Down │ │ Height Adjust     │ │ Fall Recovery   │
@@ -229,10 +229,10 @@ ambula_ws/
 ```
 IMU + Encoders ──> State Estimator ──┐
 Depth/LiDAR  ──> Perception          │
-                                      ├─> Balancer / State Machine
+                                     ├─> Balancer / State Machine
 Simulation + RL <────────────────────┘
-                                      ├─> ROS 2 Control ──> Teensy ──> ODrive ──> Motors/Servo
-Safety (E-Stop, Watchdog) ────────────┘
+                                     ├─> ROS 2 Control ──> Teensy ──> ODrive ──> Motors/Servo
+Safety (E-Stop, Watchdog) ───────────┘
 ```
 
 ---
