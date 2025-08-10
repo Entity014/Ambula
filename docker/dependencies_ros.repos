@@ -1,0 +1,6 @@
+repositories:
+
+  mujoco_ros2_control:
+    type: git
+    url: https://github.com/moveit/mujoco_ros2_control.git
+    version: humble
