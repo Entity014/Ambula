@@ -5,11 +5,48 @@ if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
   add_compile_options(-Wall -Wextra -Wpedantic)
 endif()
 
-# find dependencies
+# --- find dependencies ---
 find_package(ament_cmake REQUIRED)
-# uncomment the following section in order to fill in
-# further dependencies manually.
-# find_package(<dependency> REQUIRED)
+find_package(rclcpp REQUIRED)
+find_package(sensor_msgs REQUIRED)
+find_package(geometry_msgs REQUIRED)
+find_package(pcl_conversions REQUIRED)
+find_package(PCL REQUIRED COMPONENTS common io filters segmentation sample_consensus)
+find_package(tf2_ros REQUIRED)
+find_package(tf2_eigen REQUIRED)
+find_package(Eigen3 REQUIRED)
+
+# --- target ---
+add_executable(stair_perception src/stair_perception.cpp)
+target_compile_features(stair_perception PUBLIC cxx_std_17)
+
+target_include_directories(stair_perception PUBLIC
+  ${PCL_INCLUDE_DIRS}
+  ${EIGEN3_INCLUDE_DIRS}
+)
+
+add_definitions(${PCL_DEFINITIONS})
+
+target_link_libraries(stair_perception
+  ${PCL_LIBRARIES}
+  Eigen3::Eigen
+)
+
+ament_target_dependencies(stair_perception
+  rclcpp
+  sensor_msgs
+  geometry_msgs
+  pcl_conversions
+  tf2_ros
+  tf2_eigen
+)
+
+install(TARGETS stair_perception
+  DESTINATION lib/${PROJECT_NAME})
+
+install(PROGRAMS
+    DESTINATION lib/${PROJECT_NAME}
+)
 
 if(BUILD_TESTING)
   find_package(ament_lint_auto REQUIRED)
