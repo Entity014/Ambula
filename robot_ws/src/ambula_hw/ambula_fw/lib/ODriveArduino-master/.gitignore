@@ -1,0 +1,9 @@
+
+# Doxygen
+/src/xml
+
+# PlatformIO
+/.pio
+
+# OS files
+.DS_Store

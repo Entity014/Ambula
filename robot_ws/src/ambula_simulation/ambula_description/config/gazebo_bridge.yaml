@@ -40,6 +40,18 @@
   gz_type_name: "gz.msgs.PointCloudPacked"
   direction: GZ_TO_ROS
 
+- ros_topic_name: "/ambula/navsat"
+  gz_topic_name: "navsat"
+  ros_type_name: "sensor_msgs/msg/NavSatFix"
+  gz_type_name: "gz.msgs.NavSat"
+  direction: "GZ_TO_ROS"
+
+- ros_topic_name: "/ambula/imu"
+  gz_topic_name: "/imu"
+  ros_type_name: "sensor_msgs/msg/Imu"
+  gz_type_name: "gz.msgs.IMU"
+  direction: "GZ_TO_ROS"
+
 - ros_topic_name: "/ambula/camera_position_cmd"
   gz_topic_name: "camera_position_cmd"
   ros_type_name: "std_msgs/msg/Float64"

@@ -10,12 +10,19 @@
 #include <pcl/filters/passthrough.h>                 // PassThrough
 #include <pcl/filters/statistical_outlier_removal.h> // SOR
 #include <pcl/common/transforms.h>                   // transformPointCloud
+#include <pcl/segmentation/sac_segmentation.h>
+#include <pcl/filters/extract_indices.h>
+#include <pcl/ModelCoefficients.h>
 
 // tf2
 #include <tf2_ros/transform_listener.h>
 #include <tf2_ros/buffer.h>
 #include <tf2_eigen/tf2_eigen.hpp>
 #include <Eigen/Geometry>
+
+#include <cmath>
+#include <string>
+#include <vector>
 
 class StairPerception : public rclcpp::Node
 {
@@ -59,23 +66,25 @@ public:
     }
 
 private:
+    using PointT = pcl::PointXYZ;
+
     void cloudCallback(const sensor_msgs::msg::PointCloud2::SharedPtr msg)
     {
         const std::string source_frame = msg->header.frame_id;
 
         // 0) ROS2 -> PCL
-        pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_raw(new pcl::PointCloud<pcl::PointXYZ>);
+        pcl::PointCloud<PointT>::Ptr cloud_raw(new pcl::PointCloud<PointT>);
         pcl::fromROSMsg(*msg, *cloud_raw);
 
         // 0.1) Remove NaN
-        pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_clean(new pcl::PointCloud<pcl::PointXYZ>);
+        pcl::PointCloud<PointT>::Ptr cloud_clean(new pcl::PointCloud<PointT>);
         std::vector<int> idx;
         pcl::removeNaNFromPointCloud(*cloud_raw, *cloud_clean, idx);
 
-        // 0.2) Downsample FIRST (in source frame)
-        pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_ds_src(new pcl::PointCloud<pcl::PointXYZ>);
+        // 0.2) Downsample (source frame)
+        pcl::PointCloud<PointT>::Ptr cloud_ds_src(new pcl::PointCloud<PointT>);
         {
-            pcl::VoxelGrid<pcl::PointXYZ> vg;
+            pcl::VoxelGrid<PointT> vg;
             vg.setInputCloud(cloud_clean);
             vg.setLeafSize(voxel_size_, voxel_size_, voxel_size_);
             vg.filter(*cloud_ds_src);
