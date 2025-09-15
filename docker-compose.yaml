@@ -12,6 +12,15 @@ services:
     ipc: host
     privileged: true
     stop_grace_period: 1s
+
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: 1
+    #           capabilities: [gpu]
+
     environment:
       - ROS_DOMAIN_ID=15
       - DISPLAY=${DISPLAY}

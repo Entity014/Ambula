@@ -11,6 +11,7 @@
 
   <!-- Sensor -->
   <xacro:include filename="$(find ambula_description)/urdf/ambula_oa/sensor/depth_camera.urdf.xacro" />
+  <xacro:include filename="$(find ambula_description)/urdf/ambula_oa/sensor/imu.urdf.xacro" />
 
   <!-- <xacro:ambula_ros2_control/> -->
 

@@ -11,10 +11,10 @@
            │                     │
         ┌──┴───────────── Wi-Fi AP/Router
         │
-   ┌────┴───────┐     ┌────────────────┐
-   │  Switch    │────▶│  Pi-A (Perception/VIO) ── USB3 ── D435i
+   ┌────┴───────┐     ┌─────────────────────────┐
+   │  Switch    │────▶│  Pi-A (Perception/VIO)  │── D435i
    │ (GigE)     │◀────│   + Wi-Fi uplink to PC  │
-   └────┬───────┘     └────────────────┘
+   └────┬───────┘     └─────────────────────────┘
         │
         └────────────── Pi-B (Control/Estimator/Safety) ── CAN ── Teensy ── ODrive/Servo
                                          │
@@ -57,12 +57,13 @@ ROS 2 Control
 ```
 
 **Joint & Control Mode**
-| Joint | Motor Type | Control Mode | Feedback Sensor |
-|---------|---------------|----------------------------|-----------------|
-| Waist | Servo 360° | Position Control (Absolute)| AS5048A |
-| Hip | BLDC (ODrive) | Position Control (Cascaded)| AS5048A |
-| Knee | BLDC (ODrive) | Position Control (Cascaded)| AS5048A |
-| Wheel | BLDC (ODrive) | Torque Control (FOC) | AS5048A |
+
+| Joint | Motor Type | Control Mode                | Feedback Sensor |
+| ----- | ---------- | --------------------------- | --------------- |
+| Waist | Servo 360° | Position Control (Absolute) | AS5048A         |
+| Hip   | BLDC       | Position Control (Cascaded) | AS5048A         |
+| Knee  | BLDC       | Position Control (Cascaded) | AS5048A         |
+| Wheel | BLDC       | Torque Control (FOC)        | AS5048A         |
 
 ---
 
@@ -91,10 +92,50 @@ ROS 2 Control
 
 ## 4) Balancing & Motion Control
 
-**Controller**
+**Controller Architecture**
 
-- LQR: สำหรับ balance & drive
-- MPPI: สำหรับ nonlinear dynamics handling
+```
+               RGB-D Camera
+                     │
+                     ▼
+    ┌─────────────────────────────┐
+    │   Perception (Obstacle /    │
+    │   Stair Detection)          │
+    │  • Geometric / DL detection │
+    │  • Output: StepInfo         │
+    └─────────────────────────────┘
+                     │ StepInfo (riser, tread, n_steps, conf.)
+                     ▼
+ Encoders           IMU
+    │                │
+    └───────┐   ┌────┘
+            ▼   ▼
+     ┌──────────────────┐
+     │ State Estimation │
+     │ • Fuse encoders  │
+     │   & IMU          │
+     │ • Pose, vel, ht  │
+     └──────────────────┘
+              ▲
+              │
+        User Input / Mission / StepInfo
+              │
+              ▼
+     ┌──────────────────┐
+     │ Position         │
+     │ Controller       │
+     └──────────────────┘
+              │
+   ┌──────────┴─────────┬──────────────┬──────────────────┬───────────────────┐
+   ▼                    ▼              ▼                  ▼                   ▼
+┌─────────────┐ ┌────────────┐ ┌──────────────┐ ┌───────────────────┐ ┌─────────────────┐
+│ Stabilizing │ │ Jump       │ │ Step Up/Down │ │ Height Adjust     │ │ Fall Recovery   │
+│ Controller  │ │ Controller │ │ Controller   │ │ Controller        │ │ Controller      │
+└────┬────────┘ └───────┬────┘ └───────┬──────┘ └─────────┬─────────┘ └───────┬─────────┘
+     │                  │              │                  │                   │
+     ▼                  ▼              ▼                  ▼                   ▼
+ Wheel Motors       Hip Motors     Wheel + Leg        Leg (Hip/Knee)      Wheel + Leg
+```
 
 **Main State Machine**
 
@@ -107,6 +148,13 @@ balance
  ├─ height_adjust (low/mid/high stance) [Leg]
  └─ fall_recover (detect fall → posture adjust → stand up) [Wheel + Leg]
 ```
+
+**การทำงานหลัก**
+
+- **Perception:** ตรวจจับบันไดหรือสิ่งกีดขวางเพื่อเลือกโหมด Step Up/Down หรือ Height Adjust
+- **State Estimation:** รวม IMU + encoders + optional VIO เพื่อให้ได้ state vector
+- **Controllers:** Stabilizing, Jump, Step Up/Down, Height Adjust, Fall Recovery
+- **Actuators:** ส่งคำสั่งไปยัง Wheel, Hip/Knee, Waist
 
 ---
 
@@ -159,14 +207,19 @@ StepInfo: {riser_mean, tread_mean, n_steps, confidence}
 ## 8) ROS 2 Workspace Structure
 
 ```
-ambula_ws/src/
-  ambula_hw/                # Teensy/ODrive driver
-  ambula_balancer/          # State machine + LQR + MPPI + RL integration
-  ambula_state_estimator/   # Mahony + VINS wrapper
-  ambula_perception/   # Stair/obstacle detection
-  ambula_safety/            # E-Stop, watchdog
-  ambula_rl/                # Training + inference scripts
-  ambula_bringup/           # Launch + params
+ambula_ws/
+  src/
+    ambula_bringup/            # launch + params + compose scenarios
+    ambula_controller/         # LQR/MPPI/RL + state machine
+    ambula_hw/                 # hardware interface + bridges
+      ambula_fw/               # PlatformIO firmware สำหรับ Teensy
+    ambula_perception/         # stair/obstacle detection (RGB‑D/LiDAR)
+    ambula_rl/                 # RL training/inference + tools
+    ambula_safety/             # E‑Stop, watchdog, fault monitor
+    ambula_simulation/
+      ambula_description/      # URDF/Xacro + meshes
+      ambula_world/            # Gazebo worlds/models
+    ambula_state_estimator/    # Mahony + VIO/VINS wrapper
 ```
 
 ---
@@ -176,10 +229,10 @@ ambula_ws/src/
 ```
 IMU + Encoders ──> State Estimator ──┐
 Depth/LiDAR  ──> Perception          │
-                                      ├─> Balancer / State Machine
+                                     ├─> Balancer / State Machine
 Simulation + RL <────────────────────┘
-                                      ├─> ROS 2 Control ──> Teensy ──> ODrive ──> Motors/Servo
-Safety (E-Stop, Watchdog) ────────────┘
+                                     ├─> ROS 2 Control ──> Teensy ──> ODrive ──> Motors/Servo
+Safety (E-Stop, Watchdog) ───────────┘
 ```
 
 ---
