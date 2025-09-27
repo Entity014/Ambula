@@ -1,0 +1,2 @@
+Invoking command in '/home/robot_ws/build/ambula_controller': CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH}:/opt/ros/jazzy /usr/bin/cmake --build /home/robot_ws/build/ambula_controller -- -j16 -l16
+Invoked command in '/home/robot_ws/build/ambula_controller' returned '2': CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH}:/opt/ros/jazzy /usr/bin/cmake --build /home/robot_ws/build/ambula_controller -- -j16 -l16

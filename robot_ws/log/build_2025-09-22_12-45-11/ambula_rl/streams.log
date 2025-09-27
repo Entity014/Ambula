@@ -1,0 +1,20 @@
+[0.024s] Invoking command in '/home/robot_ws/build/ambula_rl': CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH}:/opt/ros/jazzy /usr/bin/cmake --build /home/robot_ws/build/ambula_rl -- -j16 -l16
+[0.233s] Invoked command in '/home/robot_ws/build/ambula_rl' returned '0': CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH}:/opt/ros/jazzy /usr/bin/cmake --build /home/robot_ws/build/ambula_rl -- -j16 -l16
+[0.239s] Invoking command in '/home/robot_ws/build/ambula_rl': CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH}:/opt/ros/jazzy /usr/bin/cmake --install /home/robot_ws/build/ambula_rl
+[0.314s] -- Install configuration: ""
+[0.318s] -- Up-to-date: /home/robot_ws/install/ambula_rl/share/ament_index/resource_index/package_run_dependencies/ambula_rl
+[0.319s] -- Up-to-date: /home/robot_ws/install/ambula_rl/share/ament_index/resource_index/parent_prefix_path/ambula_rl
+[0.320s] -- Up-to-date: /home/robot_ws/install/ambula_rl/share/ambula_rl/environment/ament_prefix_path.sh
+[0.320s] -- Up-to-date: /home/robot_ws/install/ambula_rl/share/ambula_rl/environment/ament_prefix_path.dsv
+[0.323s] -- Up-to-date: /home/robot_ws/install/ambula_rl/share/ambula_rl/environment/path.sh
+[0.326s] -- Up-to-date: /home/robot_ws/install/ambula_rl/share/ambula_rl/environment/path.dsv
+[0.327s] -- Up-to-date: /home/robot_ws/install/ambula_rl/share/ambula_rl/local_setup.bash
+[0.329s] -- Up-to-date: /home/robot_ws/install/ambula_rl/share/ambula_rl/local_setup.sh
+[0.331s] -- Up-to-date: /home/robot_ws/install/ambula_rl/share/ambula_rl/local_setup.zsh
+[0.332s] -- Up-to-date: /home/robot_ws/install/ambula_rl/share/ambula_rl/local_setup.dsv
+[0.332s] -- Installing: /home/robot_ws/install/ambula_rl/share/ambula_rl/package.dsv
+[0.333s] -- Up-to-date: /home/robot_ws/install/ambula_rl/share/ament_index/resource_index/packages/ambula_rl
+[0.335s] -- Up-to-date: /home/robot_ws/install/ambula_rl/share/ambula_rl/cmake/ambula_rlConfig.cmake
+[0.338s] -- Up-to-date: /home/robot_ws/install/ambula_rl/share/ambula_rl/cmake/ambula_rlConfig-version.cmake
+[0.340s] -- Up-to-date: /home/robot_ws/install/ambula_rl/share/ambula_rl/package.xml
+[0.419s] Invoked command in '/home/robot_ws/build/ambula_rl' returned '0': CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH}:/opt/ros/jazzy /usr/bin/cmake --install /home/robot_ws/build/ambula_rl

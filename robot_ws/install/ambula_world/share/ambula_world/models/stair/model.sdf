@@ -1,0 +1,22 @@
+<?xml version="1.0" ?>
+<sdf version="1.6">
+  <model name="stair">
+    <static>true</static>
+    <link name="stair_link">
+      <collision name="stair_collision">
+        <geometry>
+          <mesh>
+            <uri>model://stair/stair.dae</uri>
+          </mesh>
+        </geometry>
+      </collision>
+      <visual name="stair_visual">
+        <geometry>
+          <mesh>
+            <uri>model://stair/stair.dae</uri>
+          </mesh>
+        </geometry>
+      </visual>
+    </link>
+  </model>
+</sdf>

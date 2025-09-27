@@ -1,0 +1,42 @@
+[0.014s] Invoking command in '/home/robot_ws/build/ambula_safety': CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH}:/opt/ros/jazzy /usr/bin/cmake /home/robot_ws/src/ambula_safety -DCMAKE_INSTALL_PREFIX=/home/robot_ws/install/ambula_safety
+[0.231s] -- The C compiler identification is GNU 13.3.0
+[0.572s] -- The CXX compiler identification is GNU 13.3.0
+[0.680s] -- Detecting C compiler ABI info
+[1.114s] -- Detecting C compiler ABI info - done
+[1.190s] -- Check for working C compiler: /usr/bin/cc - skipped
+[1.192s] -- Detecting C compile features
+[1.196s] -- Detecting C compile features - done
+[1.258s] -- Detecting CXX compiler ABI info
+[1.864s] -- Detecting CXX compiler ABI info - done
+[1.912s] -- Check for working CXX compiler: /usr/bin/c++ - skipped
+[1.914s] -- Detecting CXX compile features
+[1.917s] -- Detecting CXX compile features - done
+[1.950s] -- Found ament_cmake: 2.5.4 (/opt/ros/jazzy/share/ament_cmake/cmake)
+[2.413s] -- Found Python3: /usr/bin/python3 (found version "3.12.3") found components: Interpreter 
+[2.595s] -- Found ament_lint_auto: 0.17.3 (/opt/ros/jazzy/share/ament_lint_auto/cmake)
+[2.712s] -- Added test 'lint_cmake' to check CMake code style
+[2.713s] -- Added test 'xmllint' to check XML markup files
+[2.714s] -- Configuring done (2.7s)
+[2.716s] -- Generating done (0.0s)
+[2.717s] -- Build files have been written to: /home/robot_ws/build/ambula_safety
+[2.721s] Invoked command in '/home/robot_ws/build/ambula_safety' returned '0': CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH}:/opt/ros/jazzy /usr/bin/cmake /home/robot_ws/src/ambula_safety -DCMAKE_INSTALL_PREFIX=/home/robot_ws/install/ambula_safety
+[2.722s] Invoking command in '/home/robot_ws/build/ambula_safety': CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH}:/opt/ros/jazzy /usr/bin/cmake --build /home/robot_ws/build/ambula_safety -- -j16 -l16
+[2.760s] Invoked command in '/home/robot_ws/build/ambula_safety' returned '0': CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH}:/opt/ros/jazzy /usr/bin/cmake --build /home/robot_ws/build/ambula_safety -- -j16 -l16
+[2.761s] Invoking command in '/home/robot_ws/build/ambula_safety': CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH}:/opt/ros/jazzy /usr/bin/cmake --install /home/robot_ws/build/ambula_safety
+[2.770s] -- Install configuration: ""
+[2.771s] -- Installing: /home/robot_ws/install/ambula_safety/share/ament_index/resource_index/package_run_dependencies/ambula_safety
+[2.771s] -- Installing: /home/robot_ws/install/ambula_safety/share/ament_index/resource_index/parent_prefix_path/ambula_safety
+[2.771s] -- Installing: /home/robot_ws/install/ambula_safety/share/ambula_safety/environment/ament_prefix_path.sh
+[2.771s] -- Installing: /home/robot_ws/install/ambula_safety/share/ambula_safety/environment/ament_prefix_path.dsv
+[2.771s] -- Installing: /home/robot_ws/install/ambula_safety/share/ambula_safety/environment/path.sh
+[2.771s] -- Installing: /home/robot_ws/install/ambula_safety/share/ambula_safety/environment/path.dsv
+[2.771s] -- Installing: /home/robot_ws/install/ambula_safety/share/ambula_safety/local_setup.bash
+[2.772s] -- Installing: /home/robot_ws/install/ambula_safety/share/ambula_safety/local_setup.sh
+[2.772s] -- Installing: /home/robot_ws/install/ambula_safety/share/ambula_safety/local_setup.zsh
+[2.772s] -- Installing: /home/robot_ws/install/ambula_safety/share/ambula_safety/local_setup.dsv
+[2.772s] -- Installing: /home/robot_ws/install/ambula_safety/share/ambula_safety/package.dsv
+[2.772s] -- Installing: /home/robot_ws/install/ambula_safety/share/ament_index/resource_index/packages/ambula_safety
+[2.772s] -- Installing: /home/robot_ws/install/ambula_safety/share/ambula_safety/cmake/ambula_safetyConfig.cmake
+[2.772s] -- Installing: /home/robot_ws/install/ambula_safety/share/ambula_safety/cmake/ambula_safetyConfig-version.cmake
+[2.772s] -- Installing: /home/robot_ws/install/ambula_safety/share/ambula_safety/package.xml
+[2.787s] Invoked command in '/home/robot_ws/build/ambula_safety' returned '0': CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH}:/opt/ros/jazzy /usr/bin/cmake --install /home/robot_ws/build/ambula_safety

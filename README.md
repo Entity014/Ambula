@@ -16,7 +16,7 @@
    │ (GigE)     │◀────│   + Wi-Fi uplink to PC  │
    └────┬───────┘     └─────────────────────────┘
         │
-        └────────────── Pi-B (Control/Estimator/Safety) ── CAN ── Teensy ── ODrive/Servo
+        └────────────── Pi-B (Control/Estimator/Safety) ── Teensy (Micro ROS) ── ODrive/Servo (CAN BUS)
                                          │
                                          └─ SPI ── AS5048A (ทุก joint)
 ```
@@ -126,8 +126,8 @@ ROS 2 Control
      │ Controller       │
      └──────────────────┘
               │
-   ┌──────────┴─────────┬──────────────┬──────────────────┬───────────────────┐
-   ▼                    ▼              ▼                  ▼                   ▼
+     ┌────────┴─────────┬──────────────┬──────────────────┬───────────────────┐
+     ▼                  ▼              ▼                  ▼                   ▼
 ┌─────────────┐ ┌────────────┐ ┌──────────────┐ ┌───────────────────┐ ┌─────────────────┐
 │ Stabilizing │ │ Jump       │ │ Step Up/Down │ │ Height Adjust     │ │ Fall Recovery   │
 │ Controller  │ │ Controller │ │ Controller   │ │ Controller        │ │ Controller      │

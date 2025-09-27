@@ -1,152 +1,154 @@
 
-#include <Arduino.h>
-#include "ODriveCAN.h"
+/*
+  Using the BNO08x IMU
 
-#define CAN_BAUDRATE 250000
-#define ODRV0_NODE_ID 0
+  Example : Geomagnetic Rotation Vector to Euler Angles
 
-#include <FlexCAN_T4.h>
-#include "ODriveFlexCAN.hpp"
-struct ODriveStatus; // hack to prevent teensy compile error
+  This example was initially created by github user SFSailor November 2023
+  https://github.com/sparkfun/SparkFun_BNO08x_Arduino_Library/issues/10
+  https://forum.sparkfun.com/viewtopic.php?f=83&t=60523&p=245145#p245145
 
-FlexCAN_T4<CAN1, RX_SIZE_256, TX_SIZE_16> can_intf;
+  Modified from original example of Euler Angles
+  By: Paul Clark
+  Date: April 28th, 2020
 
-void onCanMessage(const CanMsg &msg);
+  Using the Geomagnetic Rotation vectors,
+  This example shows how to output the Euler angles: roll, pitch and yaw.
+  The yaw (compass heading) is tilt-compensated, which is nice.
+  https://en.wikipedia.org/wiki/Conversion_between_quaternions_and_Euler_angles
+  https://github.com/sparkfun/SparkFun_MPU-9250-DMP_Arduino_Library/issues/5#issuecomment-306509440
 
-bool setupCan()
-{
-    can_intf.begin();
-    can_intf.setBaudRate(CAN_BAUDRATE);
-    can_intf.setMaxMB(16);
-    can_intf.enableFIFO();
-    can_intf.enableFIFOInterrupt();
-    can_intf.onReceive(onCanMessage);
-    return true;
-}
+  By: Nathan Seidle
+  SparkFun Electronics
+  Date: December 21st, 2017
+  SparkFun code, firmware, and software is released under the MIT License.
+    Please see LICENSE.md for further details.
 
-ODriveCAN odrv0(wrap_can_intf(can_intf), ODRV0_NODE_ID); // Standard CAN message ID
-ODriveCAN *odrives[] = {&odrv0};                         // Make sure all ODriveCAN instances are accounted for here
+  Originally written by Nathan Seidle @ SparkFun Electronics, December 28th, 2017
 
-struct ODriveUserData
-{
-    Heartbeat_msg_t last_heartbeat;
-    bool received_heartbeat = false;
-    Get_Encoder_Estimates_msg_t last_feedback;
-    bool received_feedback = false;
-};
+  Adjusted by Pete Lewis @ SparkFun Electronics, June 2023 to incorporate the
+  CEVA Sensor Hub Driver, found here:
+  https://github.com/ceva-dsp/sh2
 
-ODriveUserData odrv0_user_data;
+  Also, utilizing code from the Adafruit BNO08x Arduino Library by Bryan Siepert
+  for Adafruit Industries. Found here:
+  https://github.com/adafruit/Adafruit_BNO08x
 
-void onHeartbeat(Heartbeat_msg_t &msg, void *user_data)
-{
-    ODriveUserData *odrv_user_data = static_cast<ODriveUserData *>(user_data);
-    odrv_user_data->last_heartbeat = msg;
-    odrv_user_data->received_heartbeat = true;
-}
+  Also, utilizing I2C and SPI read/write functions and code from the Adafruit
+  BusIO library found here:
+  https://github.com/adafruit/Adafruit_BusIO
 
-void onFeedback(Get_Encoder_Estimates_msg_t &msg, void *user_data)
-{
-    ODriveUserData *odrv_user_data = static_cast<ODriveUserData *>(user_data);
-    odrv_user_data->last_feedback = msg;
-    odrv_user_data->received_feedback = true;
-}
+  Hardware Connections:
+  IoT RedBoard --> BNO08x
+  QWIIC --> QWIIC
+  A4  --> INT
+  A5  --> RST
 
-void onCanMessage(const CanMsg &msg)
-{
-    for (auto odrive : odrives)
-    {
-        onReceive(msg, *odrive);
-    }
-}
+  BNO08x "mode" jumpers set for I2C (default):
+  PSO: OPEN
+  PS1: OPEN
+
+  Serial.print it out at 115200 baud to serial monitor.
+
+  Feel like supporting our work? Buy a board from SparkFun!
+  https://www.sparkfun.com/products/22857
+*/
+
+#include <Wire.h>
+
+#include "SparkFun_BNO08x_Arduino_Library.h" // CTRL+Click here to get the library: http://librarymanager/All#SparkFun_BNO08x
+BNO08x myIMU;
+
+// For the most reliable interaction with the SHTP bus, we need
+// to use hardware reset control, and to monitor the H_INT pin.
+// The H_INT pin will go low when its okay to talk on the SHTP bus.
+// Note, these can be other GPIO if you like.
+// Define as -1 to disable these features.
+// #define BNO08X_INT A4
+#define BNO08X_INT -1
+// #define BNO08X_RST A5
+#define BNO08X_RST -1
+
+// #define BNO08X_ADDR 0x4B // SparkFun BNO08x Breakout (Qwiic) defaults to 0x4B
+#define BNO08X_ADDR 0x4A // Alternate address if ADR jumper is closed
+void setReports(void);
 
 void setup()
 {
     Serial.begin(115200);
 
-    // Wait for up to 3 seconds for the serial port to be opened on the PC side.
-    // If no PC connects, continue anyway.
-    for (int i = 0; i < 30 && !Serial; ++i)
+    while (!Serial)
+        delay(10); // Wait for Serial to become available.
+    // Necessary for boards with native USB (like the SAMD51 Thing+).
+    // For a final version of a project that does not need serial debug (or a USB cable plugged in),
+    // Comment out this while loop, or it will prevent the remaining code from running.
+
+    Serial.println();
+    Serial.println("BNO08x Read Example");
+
+    Wire.begin();
+
+    // if (myIMU.begin() == false) {  // Setup without INT/RST control (Not Recommended)
+    if (myIMU.begin(BNO08X_ADDR, Wire, BNO08X_INT, BNO08X_RST) == false)
     {
-        delay(100);
+        Serial.println("BNO08x not detected at default I2C address. Check your jumpers and the hookup guide. Freezing...");
+        while (1)
+            ;
     }
-    delay(200);
+    Serial.println("BNO08x found!");
 
-    Serial.println("Starting ODriveCAN demo");
+    // Wire.setClock(400000); //Increase I2C data rate to 400kHz
 
-    // Register callbacks for the heartbeat and encoder feedback messages
-    odrv0.onFeedback(onFeedback, &odrv0_user_data);
-    odrv0.onStatus(onHeartbeat, &odrv0_user_data);
+    setReports();
 
-    // Configure and initialize the CAN bus interface. This function depends on
-    // your hardware and the CAN stack that you're using.
-    if (!setupCan())
+    Serial.println("Reading events");
+    delay(100);
+}
+
+// Here is where you define the sensor outputs you want to receive
+void setReports(void)
+{
+    Serial.println("Setting desired reports");
+    if (myIMU.enableGeomagneticRotationVector() == true)
     {
-        Serial.println("CAN failed to initialize: reset required");
-        while (true)
-            ; // spin indefinitely
+        Serial.println(F("Geomagnetic Rotation vector enabled"));
+        Serial.println(F("Output in form roll, pitch, yaw"));
     }
-
-    Serial.println("Waiting for ODrive...");
-    while (!odrv0_user_data.received_heartbeat)
+    else
     {
-        pumpEvents(can_intf);
+        Serial.println("Could not enable geomagnetic rotation vector");
     }
-
-    Serial.println("found ODrive");
-
-    // request bus voltage and current (1sec timeout)
-    Serial.println("attempting to read bus voltage and current");
-    Get_Bus_Voltage_Current_msg_t vbus;
-    if (!odrv0.request(vbus, 1000))
-    {
-        Serial.println("vbus request failed!");
-        while (true)
-            ; // spin indefinitely
-    }
-
-    Serial.print("DC voltage [V]: ");
-    Serial.println(vbus.Bus_Voltage);
-    Serial.print("DC current [A]: ");
-    Serial.println(vbus.Bus_Current);
-
-    Serial.println("Enabling closed loop control...");
-    while (odrv0_user_data.last_heartbeat.Axis_State != ODriveAxisState::AXIS_STATE_CLOSED_LOOP_CONTROL)
-    {
-        odrv0.clearErrors();
-        delay(1);
-        odrv0.setState(ODriveAxisState::AXIS_STATE_CLOSED_LOOP_CONTROL);
-
-        // Pump events for 150ms. This delay is needed for two reasons;
-        // 1. If there is an error condition, such as missing DC power, the ODrive might
-        //    briefly attempt to enter CLOSED_LOOP_CONTROL state, so we can't rely
-        //    on the first heartbeat response, so we want to receive at least two
-        //    heartbeats (100ms default interval).
-        // 2. If the bus is congested, the setState command won't get through
-        //    immediately but can be delayed.
-        for (int i = 0; i < 15; ++i)
-        {
-            delay(10);
-            pumpEvents(can_intf);
-        }
-    }
-
-    Serial.println("ODrive running!");
 }
 
 void loop()
 {
-    // (ถ้าอยากให้ปลอดภัย ใส่ pumpEvents ไว้ด้วย แม้ Teensy จะใช้ interrupt ก็ตาม)
-    pumpEvents(can_intf);
+    delay(10);
 
-    odrv0.setTorque(0.1f); // ปล่อยให้มอเตอร์ฟรี
+    if (myIMU.wasReset())
+    {
+        Serial.print("sensor was reset ");
+        setReports();
+    }
 
-    // วิธีที่ 2: poll ขอค่าเอง (ใช้ได้ทันทีแม้ยังไม่เปิด feedback messages)
-    Get_Encoder_Estimates_msg_t fb2;
-    if (odrv0.getFeedback(fb2, 50))
-    { // timeout 50 ms
-        Serial.print("poll-pos:");
-        Serial.print(fb2.Pos_Estimate);
-        Serial.print(",poll-vel:");
-        Serial.println(fb2.Vel_Estimate);
+    // Has a new event come in on the Sensor Hub Bus?
+    if (myIMU.getSensorEvent() == true)
+    {
+
+        // is it the correct sensor data we want?
+        if (myIMU.getSensorEventID() == SENSOR_REPORTID_GEOMAGNETIC_ROTATION_VECTOR)
+        {
+
+            float roll = (myIMU.getRoll()) * 180.0 / PI;   // Convert roll to degrees
+            float pitch = (myIMU.getPitch()) * 180.0 / PI; // Convert pitch to degrees
+            float yaw = (myIMU.getYaw()) * 180.0 / PI;     // Convert yaw / heading to degrees
+
+            Serial.print(roll, 1);
+            Serial.print(F(","));
+            Serial.print(pitch, 1);
+            Serial.print(F(","));
+            Serial.print(yaw, 1);
+
+            Serial.println();
+        }
     }
 }

@@ -1,0 +1,8 @@
+source;share/ambula_safety/hook/cmake_prefix_path.ps1
+source;share/ambula_safety/hook/cmake_prefix_path.dsv
+source;share/ambula_safety/hook/cmake_prefix_path.sh
+source;share/ambula_safety/local_setup.bash
+source;share/ambula_safety/local_setup.dsv
+source;share/ambula_safety/local_setup.ps1
+source;share/ambula_safety/local_setup.sh
+source;share/ambula_safety/local_setup.zsh

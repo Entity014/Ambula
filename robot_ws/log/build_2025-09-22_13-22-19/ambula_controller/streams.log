@@ -1,0 +1,48 @@
+[0.026s] Invoking command in '/home/robot_ws/build/ambula_controller': CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH}:/opt/ros/jazzy /usr/bin/cmake --build /home/robot_ws/build/ambula_controller -- -j16 -l16
+[0.392s] Built target ament_cmake_python_copy_src
+[0.829s] running egg_info
+[0.840s] writing src.egg-info/PKG-INFO
+[0.841s] writing dependency_links to src.egg-info/dependency_links.txt
+[0.841s] writing top-level names to src.egg-info/top_level.txt
+[0.875s] reading manifest file 'src.egg-info/SOURCES.txt'
+[0.875s] writing manifest file 'src.egg-info/SOURCES.txt'
+[0.895s] Built target ament_cmake_python_build_src_egg
+[0.905s] Invoked command in '/home/robot_ws/build/ambula_controller' returned '0': CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH}:/opt/ros/jazzy /usr/bin/cmake --build /home/robot_ws/build/ambula_controller -- -j16 -l16
+[0.906s] Invoking command in '/home/robot_ws/build/ambula_controller': CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH}:/opt/ros/jazzy /usr/bin/cmake --install /home/robot_ws/build/ambula_controller
+[0.913s] -- Install configuration: ""
+[0.913s] -- Up-to-date: /home/robot_ws/install/ambula_controller/share/ambula_controller/environment/pythonpath.sh
+[0.913s] -- Up-to-date: /home/robot_ws/install/ambula_controller/share/ambula_controller/environment/pythonpath.dsv
+[0.913s] -- Up-to-date: /home/robot_ws/install/ambula_controller/lib/python3.12/site-packages/src-0.0.0-py3.12.egg-info
+[0.913s] -- Installing: /home/robot_ws/install/ambula_controller/lib/python3.12/site-packages/src-0.0.0-py3.12.egg-info/dependency_links.txt
+[0.913s] -- Installing: /home/robot_ws/install/ambula_controller/lib/python3.12/site-packages/src-0.0.0-py3.12.egg-info/top_level.txt
+[0.913s] -- Installing: /home/robot_ws/install/ambula_controller/lib/python3.12/site-packages/src-0.0.0-py3.12.egg-info/SOURCES.txt
+[0.913s] -- Installing: /home/robot_ws/install/ambula_controller/lib/python3.12/site-packages/src-0.0.0-py3.12.egg-info/PKG-INFO
+[0.913s] -- Up-to-date: /home/robot_ws/install/ambula_controller/lib/python3.12/site-packages/src
+[0.913s] -- Up-to-date: /home/robot_ws/install/ambula_controller/lib/python3.12/site-packages/src/__init__.py
+[0.913s] -- Up-to-date: /home/robot_ws/install/ambula_controller/lib/python3.12/site-packages/src/joint_motion_controller.py
+[0.913s] -- Up-to-date: /home/robot_ws/install/ambula_controller/lib/python3.12/site-packages/src/forward_kinematic.py
+[0.937s] Listing '/home/robot_ws/install/ambula_controller/lib/python3.12/site-packages/src'...
+[0.940s] -- Up-to-date: /home/robot_ws/install/ambula_controller/share/ambula_controller/src
+[0.940s] -- Up-to-date: /home/robot_ws/install/ambula_controller/share/ambula_controller/src/__init__.py
+[0.940s] -- Up-to-date: /home/robot_ws/install/ambula_controller/share/ambula_controller/src/joint_motion_controller.py
+[0.941s] -- Up-to-date: /home/robot_ws/install/ambula_controller/share/ambula_controller/src/forward_kinematic.py
+[0.941s] -- Up-to-date: /home/robot_ws/install/ambula_controller/lib/ambula_controller/forward_kinematic.py
+[0.941s] -- Up-to-date: /home/robot_ws/install/ambula_controller/lib/ambula_controller/ambula_controller
+[0.941s] -- Installing: /home/robot_ws/install/ambula_controller/lib/ambula_controller/ambula_controller/fk_leg_plot.py
+[0.941s] -- Installing: /home/robot_ws/install/ambula_controller/lib/ambula_controller/ambula_controller/fk_leg_planar3r_symbolic.py
+[0.941s] -- Up-to-date: /home/robot_ws/install/ambula_controller/share/ament_index/resource_index/package_run_dependencies/ambula_controller
+[0.941s] -- Up-to-date: /home/robot_ws/install/ambula_controller/share/ament_index/resource_index/parent_prefix_path/ambula_controller
+[0.941s] -- Up-to-date: /home/robot_ws/install/ambula_controller/share/ambula_controller/environment/ament_prefix_path.sh
+[0.941s] -- Up-to-date: /home/robot_ws/install/ambula_controller/share/ambula_controller/environment/ament_prefix_path.dsv
+[0.941s] -- Up-to-date: /home/robot_ws/install/ambula_controller/share/ambula_controller/environment/path.sh
+[0.941s] -- Up-to-date: /home/robot_ws/install/ambula_controller/share/ambula_controller/environment/path.dsv
+[0.941s] -- Up-to-date: /home/robot_ws/install/ambula_controller/share/ambula_controller/local_setup.bash
+[0.941s] -- Up-to-date: /home/robot_ws/install/ambula_controller/share/ambula_controller/local_setup.sh
+[0.941s] -- Up-to-date: /home/robot_ws/install/ambula_controller/share/ambula_controller/local_setup.zsh
+[0.941s] -- Up-to-date: /home/robot_ws/install/ambula_controller/share/ambula_controller/local_setup.dsv
+[0.941s] -- Installing: /home/robot_ws/install/ambula_controller/share/ambula_controller/package.dsv
+[0.941s] -- Up-to-date: /home/robot_ws/install/ambula_controller/share/ament_index/resource_index/packages/ambula_controller
+[0.941s] -- Up-to-date: /home/robot_ws/install/ambula_controller/share/ambula_controller/cmake/ambula_controllerConfig.cmake
+[0.941s] -- Up-to-date: /home/robot_ws/install/ambula_controller/share/ambula_controller/cmake/ambula_controllerConfig-version.cmake
+[0.941s] -- Up-to-date: /home/robot_ws/install/ambula_controller/share/ambula_controller/package.xml
+[0.942s] Invoked command in '/home/robot_ws/build/ambula_controller' returned '0': CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH}:/opt/ros/jazzy /usr/bin/cmake --install /home/robot_ws/build/ambula_controller

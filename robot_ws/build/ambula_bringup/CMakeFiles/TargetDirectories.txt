@@ -1,0 +1,9 @@
+/home/robot_ws/build/ambula_bringup/CMakeFiles/uninstall.dir
+/home/robot_ws/build/ambula_bringup/CMakeFiles/ambula_bringup_uninstall.dir
+/home/robot_ws/build/ambula_bringup/CMakeFiles/test.dir
+/home/robot_ws/build/ambula_bringup/CMakeFiles/edit_cache.dir
+/home/robot_ws/build/ambula_bringup/CMakeFiles/rebuild_cache.dir
+/home/robot_ws/build/ambula_bringup/CMakeFiles/list_install_components.dir
+/home/robot_ws/build/ambula_bringup/CMakeFiles/install.dir
+/home/robot_ws/build/ambula_bringup/CMakeFiles/install/local.dir
+/home/robot_ws/build/ambula_bringup/CMakeFiles/install/strip.dir

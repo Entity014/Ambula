@@ -1,0 +1,3 @@
+prepend-non-duplicate;GZ_SIM_RESOURCE_PATH;/home/robot_ws/install/ambula_world/share
+prepend-non-duplicate;GZ_SIM_MODEL_PATH;share/ambula_world/models
+prepend-non-duplicate;GZ_SIM_RESOURCE_PATH;share/ambula_world/models

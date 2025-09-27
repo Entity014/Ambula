@@ -1,0 +1,1 @@
+/home/robot_ws/install/ambula_world:/home/robot_ws/install/ambula_state_estimator:/home/robot_ws/install/ambula_safety:/home/robot_ws/install/ambula_rl:/home/robot_ws/install/ambula_perception:/home/robot_ws/install/ambula_hw:/home/robot_ws/install/ambula_description:/home/robot_ws/install/ambula_controller:/home/robot_ws/install/ambula_bringup:/opt/ros/jazzy

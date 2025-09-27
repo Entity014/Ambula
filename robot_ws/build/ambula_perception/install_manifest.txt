@@ -1,0 +1,16 @@
+/home/robot_ws/install/ambula_perception/lib/ambula_perception/stair_perception
+/home/robot_ws/install/ambula_perception/share/ament_index/resource_index/package_run_dependencies/ambula_perception
+/home/robot_ws/install/ambula_perception/share/ament_index/resource_index/parent_prefix_path/ambula_perception
+/home/robot_ws/install/ambula_perception/share/ambula_perception/environment/ament_prefix_path.sh
+/home/robot_ws/install/ambula_perception/share/ambula_perception/environment/ament_prefix_path.dsv
+/home/robot_ws/install/ambula_perception/share/ambula_perception/environment/path.sh
+/home/robot_ws/install/ambula_perception/share/ambula_perception/environment/path.dsv
+/home/robot_ws/install/ambula_perception/share/ambula_perception/local_setup.bash
+/home/robot_ws/install/ambula_perception/share/ambula_perception/local_setup.sh
+/home/robot_ws/install/ambula_perception/share/ambula_perception/local_setup.zsh
+/home/robot_ws/install/ambula_perception/share/ambula_perception/local_setup.dsv
+/home/robot_ws/install/ambula_perception/share/ambula_perception/package.dsv
+/home/robot_ws/install/ambula_perception/share/ament_index/resource_index/packages/ambula_perception
+/home/robot_ws/install/ambula_perception/share/ambula_perception/cmake/ambula_perceptionConfig.cmake
+/home/robot_ws/install/ambula_perception/share/ambula_perception/cmake/ambula_perceptionConfig-version.cmake
+/home/robot_ws/install/ambula_perception/share/ambula_perception/package.xml

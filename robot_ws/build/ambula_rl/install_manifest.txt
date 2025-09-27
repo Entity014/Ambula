@@ -1,0 +1,15 @@
+/home/robot_ws/install/ambula_rl/share/ament_index/resource_index/package_run_dependencies/ambula_rl
+/home/robot_ws/install/ambula_rl/share/ament_index/resource_index/parent_prefix_path/ambula_rl
+/home/robot_ws/install/ambula_rl/share/ambula_rl/environment/ament_prefix_path.sh
+/home/robot_ws/install/ambula_rl/share/ambula_rl/environment/ament_prefix_path.dsv
+/home/robot_ws/install/ambula_rl/share/ambula_rl/environment/path.sh
+/home/robot_ws/install/ambula_rl/share/ambula_rl/environment/path.dsv
+/home/robot_ws/install/ambula_rl/share/ambula_rl/local_setup.bash
+/home/robot_ws/install/ambula_rl/share/ambula_rl/local_setup.sh
+/home/robot_ws/install/ambula_rl/share/ambula_rl/local_setup.zsh
+/home/robot_ws/install/ambula_rl/share/ambula_rl/local_setup.dsv
+/home/robot_ws/install/ambula_rl/share/ambula_rl/package.dsv
+/home/robot_ws/install/ambula_rl/share/ament_index/resource_index/packages/ambula_rl
+/home/robot_ws/install/ambula_rl/share/ambula_rl/cmake/ambula_rlConfig.cmake
+/home/robot_ws/install/ambula_rl/share/ambula_rl/cmake/ambula_rlConfig-version.cmake
+/home/robot_ws/install/ambula_rl/share/ambula_rl/package.xml

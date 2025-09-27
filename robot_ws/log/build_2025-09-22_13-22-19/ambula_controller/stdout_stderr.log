@@ -1,0 +1,44 @@
+Built target ament_cmake_python_copy_src
+running egg_info
+writing src.egg-info/PKG-INFO
+writing dependency_links to src.egg-info/dependency_links.txt
+writing top-level names to src.egg-info/top_level.txt
+reading manifest file 'src.egg-info/SOURCES.txt'
+writing manifest file 'src.egg-info/SOURCES.txt'
+Built target ament_cmake_python_build_src_egg
+-- Install configuration: ""
+-- Up-to-date: /home/robot_ws/install/ambula_controller/share/ambula_controller/environment/pythonpath.sh
+-- Up-to-date: /home/robot_ws/install/ambula_controller/share/ambula_controller/environment/pythonpath.dsv
+-- Up-to-date: /home/robot_ws/install/ambula_controller/lib/python3.12/site-packages/src-0.0.0-py3.12.egg-info
+-- Installing: /home/robot_ws/install/ambula_controller/lib/python3.12/site-packages/src-0.0.0-py3.12.egg-info/dependency_links.txt
+-- Installing: /home/robot_ws/install/ambula_controller/lib/python3.12/site-packages/src-0.0.0-py3.12.egg-info/top_level.txt
+-- Installing: /home/robot_ws/install/ambula_controller/lib/python3.12/site-packages/src-0.0.0-py3.12.egg-info/SOURCES.txt
+-- Installing: /home/robot_ws/install/ambula_controller/lib/python3.12/site-packages/src-0.0.0-py3.12.egg-info/PKG-INFO
+-- Up-to-date: /home/robot_ws/install/ambula_controller/lib/python3.12/site-packages/src
+-- Up-to-date: /home/robot_ws/install/ambula_controller/lib/python3.12/site-packages/src/__init__.py
+-- Up-to-date: /home/robot_ws/install/ambula_controller/lib/python3.12/site-packages/src/joint_motion_controller.py
+-- Up-to-date: /home/robot_ws/install/ambula_controller/lib/python3.12/site-packages/src/forward_kinematic.py
+Listing '/home/robot_ws/install/ambula_controller/lib/python3.12/site-packages/src'...
+-- Up-to-date: /home/robot_ws/install/ambula_controller/share/ambula_controller/src
+-- Up-to-date: /home/robot_ws/install/ambula_controller/share/ambula_controller/src/__init__.py
+-- Up-to-date: /home/robot_ws/install/ambula_controller/share/ambula_controller/src/joint_motion_controller.py
+-- Up-to-date: /home/robot_ws/install/ambula_controller/share/ambula_controller/src/forward_kinematic.py
+-- Up-to-date: /home/robot_ws/install/ambula_controller/lib/ambula_controller/forward_kinematic.py
+-- Up-to-date: /home/robot_ws/install/ambula_controller/lib/ambula_controller/ambula_controller
+-- Installing: /home/robot_ws/install/ambula_controller/lib/ambula_controller/ambula_controller/fk_leg_plot.py
+-- Installing: /home/robot_ws/install/ambula_controller/lib/ambula_controller/ambula_controller/fk_leg_planar3r_symbolic.py
+-- Up-to-date: /home/robot_ws/install/ambula_controller/share/ament_index/resource_index/package_run_dependencies/ambula_controller
+-- Up-to-date: /home/robot_ws/install/ambula_controller/share/ament_index/resource_index/parent_prefix_path/ambula_controller
+-- Up-to-date: /home/robot_ws/install/ambula_controller/share/ambula_controller/environment/ament_prefix_path.sh
+-- Up-to-date: /home/robot_ws/install/ambula_controller/share/ambula_controller/environment/ament_prefix_path.dsv
+-- Up-to-date: /home/robot_ws/install/ambula_controller/share/ambula_controller/environment/path.sh
+-- Up-to-date: /home/robot_ws/install/ambula_controller/share/ambula_controller/environment/path.dsv
+-- Up-to-date: /home/robot_ws/install/ambula_controller/share/ambula_controller/local_setup.bash
+-- Up-to-date: /home/robot_ws/install/ambula_controller/share/ambula_controller/local_setup.sh
+-- Up-to-date: /home/robot_ws/install/ambula_controller/share/ambula_controller/local_setup.zsh
+-- Up-to-date: /home/robot_ws/install/ambula_controller/share/ambula_controller/local_setup.dsv
+-- Installing: /home/robot_ws/install/ambula_controller/share/ambula_controller/package.dsv
+-- Up-to-date: /home/robot_ws/install/ambula_controller/share/ament_index/resource_index/packages/ambula_controller
+-- Up-to-date: /home/robot_ws/install/ambula_controller/share/ambula_controller/cmake/ambula_controllerConfig.cmake
+-- Up-to-date: /home/robot_ws/install/ambula_controller/share/ambula_controller/cmake/ambula_controllerConfig-version.cmake
+-- Up-to-date: /home/robot_ws/install/ambula_controller/share/ambula_controller/package.xml

@@ -1,0 +1,22 @@
+[0.028s] Invoking command in '/home/robot_ws/build/ambula_perception': CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH}:/opt/ros/jazzy /usr/bin/cmake --build /home/robot_ws/build/ambula_perception -- -j16 -l16
+[0.325s] [100%] Built target stair_perception
+[0.376s] Invoked command in '/home/robot_ws/build/ambula_perception' returned '0': CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH}:/opt/ros/jazzy /usr/bin/cmake --build /home/robot_ws/build/ambula_perception -- -j16 -l16
+[0.376s] Invoking command in '/home/robot_ws/build/ambula_perception': CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH}:/opt/ros/jazzy /usr/bin/cmake --install /home/robot_ws/build/ambula_perception
+[0.382s] -- Install configuration: ""
+[0.382s] -- Up-to-date: /home/robot_ws/install/ambula_perception/lib/ambula_perception/stair_perception
+[0.383s] -- Up-to-date: /home/robot_ws/install/ambula_perception/share/ament_index/resource_index/package_run_dependencies/ambula_perception
+[0.383s] -- Up-to-date: /home/robot_ws/install/ambula_perception/share/ament_index/resource_index/parent_prefix_path/ambula_perception
+[0.383s] -- Up-to-date: /home/robot_ws/install/ambula_perception/share/ambula_perception/environment/ament_prefix_path.sh
+[0.383s] -- Up-to-date: /home/robot_ws/install/ambula_perception/share/ambula_perception/environment/ament_prefix_path.dsv
+[0.383s] -- Up-to-date: /home/robot_ws/install/ambula_perception/share/ambula_perception/environment/path.sh
+[0.383s] -- Up-to-date: /home/robot_ws/install/ambula_perception/share/ambula_perception/environment/path.dsv
+[0.383s] -- Up-to-date: /home/robot_ws/install/ambula_perception/share/ambula_perception/local_setup.bash
+[0.383s] -- Up-to-date: /home/robot_ws/install/ambula_perception/share/ambula_perception/local_setup.sh
+[0.383s] -- Up-to-date: /home/robot_ws/install/ambula_perception/share/ambula_perception/local_setup.zsh
+[0.383s] -- Up-to-date: /home/robot_ws/install/ambula_perception/share/ambula_perception/local_setup.dsv
+[0.383s] -- Installing: /home/robot_ws/install/ambula_perception/share/ambula_perception/package.dsv
+[0.383s] -- Up-to-date: /home/robot_ws/install/ambula_perception/share/ament_index/resource_index/packages/ambula_perception
+[0.384s] -- Up-to-date: /home/robot_ws/install/ambula_perception/share/ambula_perception/cmake/ambula_perceptionConfig.cmake
+[0.384s] -- Up-to-date: /home/robot_ws/install/ambula_perception/share/ambula_perception/cmake/ambula_perceptionConfig-version.cmake
+[0.384s] -- Up-to-date: /home/robot_ws/install/ambula_perception/share/ambula_perception/package.xml
+[0.385s] Invoked command in '/home/robot_ws/build/ambula_perception' returned '0': CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH}:/opt/ros/jazzy /usr/bin/cmake --install /home/robot_ws/build/ambula_perception

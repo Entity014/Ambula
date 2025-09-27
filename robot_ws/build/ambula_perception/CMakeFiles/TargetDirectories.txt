@@ -1,0 +1,10 @@
+/home/robot_ws/build/ambula_perception/CMakeFiles/uninstall.dir
+/home/robot_ws/build/ambula_perception/CMakeFiles/ambula_perception_uninstall.dir
+/home/robot_ws/build/ambula_perception/CMakeFiles/stair_perception.dir
+/home/robot_ws/build/ambula_perception/CMakeFiles/test.dir
+/home/robot_ws/build/ambula_perception/CMakeFiles/edit_cache.dir
+/home/robot_ws/build/ambula_perception/CMakeFiles/rebuild_cache.dir
+/home/robot_ws/build/ambula_perception/CMakeFiles/list_install_components.dir
+/home/robot_ws/build/ambula_perception/CMakeFiles/install.dir
+/home/robot_ws/build/ambula_perception/CMakeFiles/install/local.dir
+/home/robot_ws/build/ambula_perception/CMakeFiles/install/strip.dir
