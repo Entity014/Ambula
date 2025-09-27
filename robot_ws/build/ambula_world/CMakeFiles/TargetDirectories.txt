@@ -1,9 +1,0 @@
-/home/robot_ws/build/ambula_world/CMakeFiles/uninstall.dir
-/home/robot_ws/build/ambula_world/CMakeFiles/ambula_world_uninstall.dir
-/home/robot_ws/build/ambula_world/CMakeFiles/test.dir
-/home/robot_ws/build/ambula_world/CMakeFiles/edit_cache.dir
-/home/robot_ws/build/ambula_world/CMakeFiles/rebuild_cache.dir
-/home/robot_ws/build/ambula_world/CMakeFiles/list_install_components.dir
-/home/robot_ws/build/ambula_world/CMakeFiles/install.dir
-/home/robot_ws/build/ambula_world/CMakeFiles/install/local.dir
-/home/robot_ws/build/ambula_world/CMakeFiles/install/strip.dir

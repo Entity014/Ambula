@@ -1,9 +1,0 @@
-/home/robot_ws/build/ambula_safety/CMakeFiles/uninstall.dir
-/home/robot_ws/build/ambula_safety/CMakeFiles/ambula_safety_uninstall.dir
-/home/robot_ws/build/ambula_safety/CMakeFiles/test.dir
-/home/robot_ws/build/ambula_safety/CMakeFiles/edit_cache.dir
-/home/robot_ws/build/ambula_safety/CMakeFiles/rebuild_cache.dir
-/home/robot_ws/build/ambula_safety/CMakeFiles/list_install_components.dir
-/home/robot_ws/build/ambula_safety/CMakeFiles/install.dir
-/home/robot_ws/build/ambula_safety/CMakeFiles/install/local.dir
-/home/robot_ws/build/ambula_safety/CMakeFiles/install/strip.dir

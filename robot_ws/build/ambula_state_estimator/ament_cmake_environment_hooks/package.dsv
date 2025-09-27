@@ -1,4 +1,0 @@
-source;share/ambula_state_estimator/local_setup.bash
-source;share/ambula_state_estimator/local_setup.dsv
-source;share/ambula_state_estimator/local_setup.sh
-source;share/ambula_state_estimator/local_setup.zsh

@@ -1,4 +1,0 @@
-Invoking command in '/home/robot_ws/build/ambula_state_estimator': CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH}:/opt/ros/jazzy /usr/bin/cmake --build /home/robot_ws/build/ambula_state_estimator -- -j16 -l16
-Invoked command in '/home/robot_ws/build/ambula_state_estimator' returned '0': CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH}:/opt/ros/jazzy /usr/bin/cmake --build /home/robot_ws/build/ambula_state_estimator -- -j16 -l16
-Invoking command in '/home/robot_ws/build/ambula_state_estimator': CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH}:/opt/ros/jazzy /usr/bin/cmake --install /home/robot_ws/build/ambula_state_estimator
-Invoked command in '/home/robot_ws/build/ambula_state_estimator' returned '0': CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH}:/opt/ros/jazzy /usr/bin/cmake --install /home/robot_ws/build/ambula_state_estimator

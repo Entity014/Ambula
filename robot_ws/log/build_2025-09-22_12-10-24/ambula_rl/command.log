@@ -1,6 +1,0 @@
-Invoking command in '/home/robot_ws/build/ambula_rl': CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH}:/opt/ros/jazzy /usr/bin/cmake /home/robot_ws/src/ambula_rl -DCMAKE_INSTALL_PREFIX=/home/robot_ws/install/ambula_rl
-Invoked command in '/home/robot_ws/build/ambula_rl' returned '0': CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH}:/opt/ros/jazzy /usr/bin/cmake /home/robot_ws/src/ambula_rl -DCMAKE_INSTALL_PREFIX=/home/robot_ws/install/ambula_rl
-Invoking command in '/home/robot_ws/build/ambula_rl': CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH}:/opt/ros/jazzy /usr/bin/cmake --build /home/robot_ws/build/ambula_rl -- -j16 -l16
-Invoked command in '/home/robot_ws/build/ambula_rl' returned '0': CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH}:/opt/ros/jazzy /usr/bin/cmake --build /home/robot_ws/build/ambula_rl -- -j16 -l16
-Invoking command in '/home/robot_ws/build/ambula_rl': CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH}:/opt/ros/jazzy /usr/bin/cmake --install /home/robot_ws/build/ambula_rl
-Invoked command in '/home/robot_ws/build/ambula_rl' returned '0': CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH}:/opt/ros/jazzy /usr/bin/cmake --install /home/robot_ws/build/ambula_rl
