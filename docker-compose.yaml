@@ -1,17 +1,23 @@
+x-ambula-base: &ambula_base
+  stdin_open: true
+  tty: true
+  privileged: true
+  network_mode: host
+  ipc: host
+  stop_grace_period: 1s
+  environment:
+    - ROS_DOMAIN_ID=${ROS_DOMAIN_ID:-15}
+
 services:
-  ambula_compose:
-    image: ambula
+  ambula_main_compose:
+    # profiles: ["main"]
+    <<: *ambula_base
+    image: ambula_main
     build:
       context: .
-      dockerfile: docker/Dockerfile.main
+      dockerfile: ./docker/Dockerfile.main
       args:
         ROS_DISTRO: jazzy
-    stdin_open: true
-    tty: true
-    network_mode: host
-    ipc: host
-    privileged: true
-    stop_grace_period: 1s
 
     # deploy:
     #   resources:
@@ -22,8 +28,7 @@ services:
     #           capabilities: [gpu]
 
     environment:
-      - ROS_DOMAIN_ID=15
-      - DISPLAY=${DISPLAY}
+      - DISPLAY=${DISPLAY:-:0}
       - QT_X11_NO_MITSHM=1
       - NVIDIA_DRIVER_CAPABILITIES=all
     volumes:
@@ -34,16 +39,68 @@ services:
       - ./robot_ws:/home/robot_ws:rw
 
   foxglove:
-    extends: ambula_compose
+    extends: ambula_main_compose
     command: bash -c "source /home/.bashrc && ros2 launch foxglove_bridge foxglove_bridge_launch.xml"
 
-  simulation_bringup:
-    extends: ambula_compose
-    command: bash -c "source /home/.bashrc && ros2 launch ambula_bringup simulation_bringup.launch.py"
+  # simulation_bringup:
+  #   extends: ambula_sim_compose
+  #   command: bash -c "source /home/.bashrc && ros2 launch ambula_bringup simulation_bringup.launch.py"
+
+  ambula_carrot_compose:
+    profiles: ["carrot"]
+    <<: *ambula_base
+    image: ambula_carrot
+    build:
+      context: .
+      dockerfile: ./docker/Dockerfile.carrot
+      args:
+        ROS_DISTRO: jazzy
+    environment:
+      - QT_X11_NO_MITSHM=1
+      - NVIDIA_DRIVER_CAPABILITIES=all
+    volumes:
+      # mount X11 socket
+      - /tmp/.X11-unix:/tmp/.X11-unix:rw
+      - ${XAUTHORITY:-$HOME/.Xauthority}:/root/.Xauthority:rw
+      # mount workspace
+      - ./robot_ws:/home/robot_ws:rw
+
+  ambula_radish_compose:
+    profiles: ["radish"]
+    <<: *ambula_base
+    image: ambula_radish
+    build:
+      context: .
+      dockerfile: ./docker/Dockerfile.radish
+      args:
+        ROS_DISTRO: jazzy
+    environment:
+      - QT_X11_NO_MITSHM=1
+      - NVIDIA_DRIVER_CAPABILITIES=all
+    volumes:
+      # mount X11 socket
+      - /tmp/.X11-unix:/tmp/.X11-unix:rw
+      - ${XAUTHORITY:-$HOME/.Xauthority}:/root/.Xauthority:rw
+      # mount workspace
+      - ./robot_ws:/home/robot_ws:rw
+
+  uros-agent:
+    profiles: ["carrot", "radish", "main"]
+    image: husarion/micro-ros-agent:jazzy-5.0.0-20240726
+    <<: *ambula_base
+    # volumes:
+    #   - /dev:/dev
+    devices:
+      - /dev/ttyACM0:/dev/ttyACM0
+    command: sleep infinity
+
+  uros1-agent:
+    extends: uros-agent
+    command: ros2 run micro_ros_agent micro_ros_agent serial -D /dev/ttyACM0 serial -b 115200
 
   dev:
     extends:
-      service: ambula_compose
+      service: ambula_main_compose
     profiles:
       - dev
     restart: always

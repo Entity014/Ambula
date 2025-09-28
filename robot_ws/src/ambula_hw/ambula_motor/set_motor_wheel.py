@@ -29,17 +29,16 @@ def main():
 
     # ==== Controller Config ====
     ctrl = axis.controller.config
-    ctrl.pos_gain            = 26.0
+    ctrl.pos_gain            = 20.0
     ctrl.vel_gain            = 0.05
     ctrl.vel_integrator_gain = 0.03
     ctrl.control_mode        = ControlMode.POSITION_CONTROL
-    ctrl.vel_limit           = 30.0    # rev/s
+    ctrl.vel_limit           = 14.0    # rev/s
 
-    # ==== Encoder Config (SPI ABS AMS AS5048A) ====
-    axis.encoder.config.abs_spi_cs_gpio_pin = 6
-    axis.encoder.config.mode = EncoderMode.SPI_ABS_AMS
-    axis.encoder.config.cpr = 2**14
-    axis.encoder.config.calib_range = 1.0
+    # ==== Encoder Config (HALL SENSOR) ====
+    axis.encoder.config.mode = EncoderMode.HALL
+    axis.encoder.config.cpr = 6 * 7  # 6 hall sensor * pole_pairs
+    axis.encoder.config.calib_range = 0.05
     axis.encoder.config.use_index = False
 
     # ==== Save Configuration ก่อนเริ่ม Calib ====

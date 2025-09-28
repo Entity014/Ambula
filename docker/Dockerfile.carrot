@@ -1,0 +1,96 @@
+ARG ROS_DISTRO=jazzy
+FROM osrf/ros:${ROS_DISTRO}-desktop as base
+
+ENV ROS_DISTRO=${ROS_DISTRO}
+ENV DEBIAN_FRONTEND=noninteractive
+ENV HOME=/home
+SHELL ["/bin/bash", "-c"]
+
+
+# Install basic apt packages
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    git nano tree wget curl lsb-release make xterm byobu less gedit gnupg \
+    python3-pip python-is-python3 python3-opencv python3-tk python3-pyqt5.qtwebengine \
+    libcanberra-gtk-module libcanberra-gtk3-module libfuse2 fuse3 \
+    libqt5svg5-dev libglfw3-dev libgflags2.2 libgflags-dev libwebsocketpp-dev nlohmann-json3-dev libasio-dev \
+    software-properties-common build-essential cmake unzip zlib1g-dev libsqlite3-dev sqlite3 libcurl4-gnutls-dev libtiff5-dev \
+    libpcl-dev
+
+# ROS packages installation
+RUN apt-get update && apt-get install -y \
+    ros-${ROS_DISTRO}-joint-state-publisher \
+    ros-${ROS_DISTRO}-robot-localization \
+    ros-${ROS_DISTRO}-plotjuggler-ros \
+    ros-${ROS_DISTRO}-robot-state-publisher \
+    ros-${ROS_DISTRO}-ros2bag \
+    ros-${ROS_DISTRO}-rosbag2-storage-default-plugins \
+    ros-${ROS_DISTRO}-rqt-tf-tree \
+    ros-${ROS_DISTRO}-rmw-cyclonedds-cpp \
+    ros-${ROS_DISTRO}-xacro \
+    ros-${ROS_DISTRO}-diagnostic-updater \
+    ros-${ROS_DISTRO}-diagnostic-aggregator \
+    ros-${ROS_DISTRO}-apriltag-ros \
+    ros-${ROS_DISTRO}-actuator-msgs \
+    ros-${ROS_DISTRO}-tf-transformations \
+    ros-${ROS_DISTRO}-navigation2 \
+    ros-${ROS_DISTRO}-nav2-bringup \
+    ros-${ROS_DISTRO}-ros-gz-sim \
+    ros-${ROS_DISTRO}-ros-gz-bridge \
+    ros-${ROS_DISTRO}-gz-ros2-control \ 
+    ros-${ROS_DISTRO}-rviz2 \
+    ros-${ROS_DISTRO}-rviz-common \
+    ros-${ROS_DISTRO}-rviz-default-plugins \
+    ros-${ROS_DISTRO}-rviz-visual-tools \
+    ros-${ROS_DISTRO}-rviz-rendering \
+    ros-${ROS_DISTRO}-nav2-rviz-plugins \
+    ros-${ROS_DISTRO}-image-transport-plugins \
+    ros-${ROS_DISTRO}-gscam \
+    ros-${ROS_DISTRO}-image-common \
+    ros-${ROS_DISTRO}-topic-tools \
+    ros-${ROS_DISTRO}-rosbag2-storage-mcap \
+    ros-${ROS_DISTRO}-foxglove-bridge \
+    ros-${ROS_DISTRO}-py-trees-* \
+    ros-${ROS_DISTRO}-xacro \
+    ros-${ROS_DISTRO}-controller-manager ros-${ROS_DISTRO}-ros2-control \
+    ros-${ROS_DISTRO}-ros2-controllers \
+    ros-${ROS_DISTRO}-joint-state-publisher \
+    ros-${ROS_DISTRO}-tf-transformations ros-${ROS_DISTRO}-imu-tools ros-${ROS_DISTRO}-joy \
+    ros-${ROS_DISTRO}-rqt-controller-manager ros-${ROS_DISTRO}-rqt-robot-steering \
+    ros-${ROS_DISTRO}-rqt-robot-dashboard ros-${ROS_DISTRO}-rqt-robot-monitor \
+    ros-${ROS_DISTRO}-rqt-joint-trajectory-controller \
+    ros-${ROS_DISTRO}-tf-transformations \
+    ros-${ROS_DISTRO}-pcl-ros \
+    ros-${ROS_DISTRO}-pcl-conversions \
+    ros-${ROS_DISTRO}-cv-bridge \ 
+    ros-${ROS_DISTRO}-vision-opencv 
+
+
+WORKDIR /home
+RUN curl https://packages.osrfoundation.org/gazebo.gpg --output /usr/share/keyrings/pkgs-osrf-archive-keyring.gpg
+RUN echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/pkgs-osrf-archive-keyring.gpg] http://packages.osrfoundation.org/gazebo/ubuntu-stable $(lsb_release -cs) main" | sudo tee /etc/apt/sources.list.d/gazebo-stable.list > /dev/null
+RUN apt-get update --fix-missing
+RUN apt-get install -y gz-harmonic 
+
+
+# Python dependencies
+RUN pip3 install --no-cache-dir --break-system-packages --ignore-installed sympy \
+    transforms3d pyproj matplotlib evdev pandas "numpy<2"
+
+# Set CycloneDDS
+ENV RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
+
+# ROS Dependencies
+RUN rosdep update
+
+# Remove display warnings
+RUN mkdir /tmp/runtime-root
+ENV XDG_RUNTIME_DIR "/tmp/runtime-root"
+RUN chmod -R 0700 /tmp/runtime-root
+ENV NO_AT_BRIDGE 1
+
+# Setting .bashrc
+RUN touch /home/.bashrc
+RUN echo 'source /opt/ros/$ROS_DISTRO/setup.bash' >> /home/.bashrc \
+    && echo 'source /home/robot_ws/install/setup.bash' >> /home/.bashrc 
+
+WORKDIR /home/robot_ws
