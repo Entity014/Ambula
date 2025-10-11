@@ -5,11 +5,11 @@ void setup()
     // put your setup code here, to run once:
     Serial.begin(115200);
     Serial.println("Hello, Ambula FW!");
-    pinMode(9, OUTPUT);
+    pinMode(26, OUTPUT);
 }
 
 void loop()
 {
-    digitalWrite(9, LOW);
+    digitalWrite(26, HIGH);
     Serial.println("LED ON");
 }

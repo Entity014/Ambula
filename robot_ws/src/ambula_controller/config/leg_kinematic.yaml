@@ -1,0 +1,46 @@
+leg_fk_node:
+  ros__parameters:
+    legs:
+      - "left: left_waist,left_hip,left_knee"
+      - "right: right_waist,right_hip,right_knee"
+
+    # link lengths (m)
+    L1: 0.075
+    L2: 0.200
+    L3: 0.240
+
+    # input JointState (hardware feedback) & output frame
+    input_topic: "/joint_states/hw"
+    frame_id: "base_link"
+
+leg_ik_node:
+  ros__parameters:
+    # joint names per side (command outputs)
+    left_joints:  ["left_waist","left_hip","left_knee"]
+    right_joints: ["right_waist","right_hip","right_knee"]
+
+    # link lengths (m)
+    L1: 0.075
+    L2: 0.200
+    L3: 0.240
+
+    # desired foot pose inputs
+    left_desired_topic:  "/left_desired_pose"
+    right_desired_topic: "/right_desired_pose"
+
+    # command outputs (per side)
+    left_cmd_topic:  "/joint_states/left/raw_command"
+    right_cmd_topic: "/joint_states/right/raw_command"
+
+joint_state_command_merge_node:
+  ros__parameters:
+    left_topic: "/joint_states/left/raw_command"
+    right_topic: "/joint_states/right/raw_command"
+    output_topic: "/joint_states/raw_command"
+
+height_to_point_node:
+  ros__parameters:
+    input_topic: "/desired_height"
+    left_output_topic: "/left_desired_pose"
+    right_output_topic: "/right_desired_pose"
+

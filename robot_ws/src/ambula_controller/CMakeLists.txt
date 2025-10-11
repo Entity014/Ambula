@@ -17,11 +17,17 @@ ament_python_install_package(src)
 install(
     DIRECTORY 
     src
+    launch
+    config
     DESTINATION share/${PROJECT_NAME}
 )
 
 install(PROGRAMS
-    src/forward_kinematic.py
+    src/leg_fk.py
+    src/leg_ik.py
+    src/joint_state_command_merge.py
+    src/height_to_point.py
+    src/s_curve_command.py
     DESTINATION lib/${PROJECT_NAME}
 )
 
