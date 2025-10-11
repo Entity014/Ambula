@@ -31,6 +31,8 @@ services:
       - DISPLAY=${DISPLAY:-:0}
       - QT_X11_NO_MITSHM=1
       - NVIDIA_DRIVER_CAPABILITIES=all
+    devices:
+      - /dev/bus/usb:/dev/bus/usb
     volumes:
       # mount X11 socket
       - /tmp/.X11-unix:/tmp/.X11-unix:rw
