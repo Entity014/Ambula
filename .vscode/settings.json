@@ -66,5 +66,6 @@
         "cinttypes": "cpp",
         "typeindex": "cpp",
         "typeinfo": "cpp"
-    }
+    },
+    "cmake.sourceDirectory": "/home/xero/Ambula/robot_ws/src/ambula_bringup"
 }
