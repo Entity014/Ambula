@@ -29,6 +29,12 @@
 #include <sensor_msgs/msg/joint_state.h>
 #include <geometry_msgs/msg/twist.h>
 
+// ---------- ODrive CAN ----------
+#include "ODriveCAN.h"
+#include <FlexCAN_T4.h>
+#include "ODriveFlexCAN.hpp"
+struct ODriveStatus; // teensy compile hack
+
 enum JointIndex
 {
     J_LEFT_WAIST = 0,
@@ -131,6 +137,63 @@ Odometry odometry;
 IMU imuSensor;
 Servo_Driver servoActuator(SERVOMIN, SERVOMAX, SERVO_FREQ);
 
+// ======================= CAN / ODrive ====================
+FlexCAN_T4<CAN1, RX_SIZE_256, TX_SIZE_16> can_intf;
+
+ODriveCAN odrv_right_hip(wrap_can_intf(can_intf), ODRV_RIGHT_HIP_ID);
+ODriveCAN odrv_left_hip(wrap_can_intf(can_intf), ODRV_LEFT_HIP_ID);
+ODriveCAN odrv_right_knee(wrap_can_intf(can_intf), ODRV_RIGHT_KNEE_ID);
+ODriveCAN odrv_left_knee(wrap_can_intf(can_intf), ODRV_LEFT_KNEE_ID);
+ODriveCAN odrv_right_wheel(wrap_can_intf(can_intf), ODRV_RIGHT_WHEEL_ID);
+ODriveCAN odrv_left_wheel(wrap_can_intf(can_intf), ODRV_LEFT_WHEEL_ID);
+
+ODriveCAN *ODRIVES[6] = {
+    &odrv_right_hip, &odrv_left_hip, &odrv_right_knee,
+    &odrv_left_knee, &odrv_right_wheel, &odrv_left_wheel};
+
+struct ODrvData
+{
+    Heartbeat_msg_t hb{};
+    Get_Encoder_Estimates_msg_t fb{};
+    bool got_hb = false, got_fb = false;
+};
+ODrvData D_right_hip, D_left_hip, D_right_knee, D_left_knee, D_right_wheel, D_left_wheel;
+
+bool request_state_with_retry(
+    ODriveCAN &drv, ODrvData &ud, ODriveAxisState desired_state,
+    uint32_t settle_ms,
+    uint32_t per_try_timeout_ms,
+    int max_retry);
+
+void onHeartbeat(Heartbeat_msg_t &msg, void *user_data)
+{
+    auto *d = static_cast<ODrvData *>(user_data);
+    d->hb = msg;
+    d->got_hb = true;
+}
+void onFeedback(Get_Encoder_Estimates_msg_t &msg, void *user_data)
+{
+    auto *d = static_cast<ODrvData *>(user_data);
+    d->fb = msg;
+    d->got_fb = true;
+}
+void onCanMessage(const CanMsg &m)
+{
+    for (auto *o : ODRIVES)
+        onReceive(m, *o);
+}
+
+bool setupCan()
+{
+    can_intf.begin();
+    can_intf.setBaudRate(CAN_BAUDRATE);
+    can_intf.setMaxMB(16);
+    can_intf.enableFIFO();
+    can_intf.enableFIFOInterrupt();
+    can_intf.onReceive(onCanMessage);
+    return true;
+}
+
 //------------------------------ < Fuction Prototype > ------------------------------//
 
 void flashLED(int n_times);
@@ -172,6 +235,39 @@ void setup()
     }
     servoActuator.setServoAngle(LEFT_WAIST_CH, waist_arr[0]);  // left waist
     servoActuator.setServoAngle(RIGHT_WAIST_CH, waist_arr[1]); // right waist
+
+    // CAN & ODrive
+    if (!setupCan())
+    {
+        rclErrorLoop();
+    }
+
+    odrv_right_hip.onStatus(onHeartbeat, &D_right_hip);
+    odrv_right_hip.onFeedback(onFeedback, &D_right_hip);
+    odrv_left_hip.onStatus(onHeartbeat, &D_left_hip);
+    odrv_left_hip.onFeedback(onFeedback, &D_left_hip);
+    odrv_right_knee.onStatus(onHeartbeat, &D_right_knee);
+    odrv_right_knee.onFeedback(onFeedback, &D_right_knee);
+    odrv_left_knee.onStatus(onHeartbeat, &D_left_knee);
+    odrv_left_knee.onFeedback(onFeedback, &D_left_knee);
+    odrv_right_wheel.onStatus(onHeartbeat, &D_right_wheel);
+    odrv_right_wheel.onFeedback(onFeedback, &D_right_wheel);
+    odrv_left_wheel.onStatus(onHeartbeat, &D_left_wheel);
+    odrv_left_wheel.onFeedback(onFeedback, &D_left_wheel);
+
+    unsigned long t0 = millis();
+    while (!(
+        D_right_hip.got_hb ||
+        D_left_hip.got_hb ||
+        D_left_knee.got_hb ||
+        D_right_knee.got_hb ||
+        D_left_wheel.got_hb ||
+        D_right_wheel.got_hb))
+    {
+        pumpEvents(can_intf);
+        if (millis() - t0 > 2000)
+            break; // ไม่บล็อกนานเกิน
+    }
 
     Serial.begin(115200);
     set_microros_serial_transports(Serial);
@@ -332,6 +428,40 @@ void publishData()
     joint_state_msg.position.data[J_RIGHT_WAIST] = waist_arr[1] * DEG_TO_RAD; // rad
     joint_state_msg.velocity.data[J_RIGHT_WAIST] = 0.0;
     joint_state_msg.effort.data[J_RIGHT_WAIST] = 0.0;
+
+    pumpEvents(can_intf);
+
+    struct Map
+    {
+        ODriveCAN *drv;
+        ODrvData *data;
+        int pos_idx;
+    } maps[] = {
+        {&odrv_left_hip, &D_left_hip, J_LEFT_HIP},
+        {&odrv_left_knee, &D_left_knee, J_LEFT_KNEE},
+        {&odrv_left_wheel, &D_left_wheel, J_LEFT_WHEEL},
+        {&odrv_right_hip, &D_right_hip, J_RIGHT_HIP},
+        {&odrv_right_knee, &D_right_knee, J_RIGHT_KNEE},
+        {&odrv_right_wheel, &D_right_wheel, J_RIGHT_WHEEL}};
+
+    const float REV2RAD = 2.0f * M_PI;
+
+    for (auto &m : maps)
+    {
+        Get_Encoder_Estimates_msg_t fb;
+        // timeout เล็กๆ 2–5 ms พอ (อย่าใช้ 0 เผื่อเน็ตช้า)
+        if (m.drv->getFeedback(fb, 3))
+        {
+            joint_state_msg.position.data[m.pos_idx] = fb.Pos_Estimate * REV2RAD;
+            joint_state_msg.velocity.data[m.pos_idx] = fb.Vel_Estimate * REV2RAD;
+            // joint_state_msg.effort.data[m.pos_idx] = 0.0;
+        }
+        else
+        {
+            // ถ้าพลาดรอบนี้ ใช้ค่าเดิม (ไม่ทับเป็นศูนย์ เพื่อไม่ให้กราฟกระโดด)
+            // ปล่อยว่างก็ได้เพราะเรากำลังรีเฟรชทุก 20 ms อยู่แล้ว
+        }
+    }
 
     RCSOFTCHECK(rcl_publish(&imu_publisher, &imu_msg, NULL));
     RCSOFTCHECK(rcl_publish(&odom_publisher, &odom_msg, NULL));
