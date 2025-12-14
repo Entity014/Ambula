@@ -11,6 +11,7 @@ public:
     Servo_Driver(float min_pulses, float max_pulses, float freq);
     bool init();
     void setServoAngle(uint8_t servo_num, float angle);
+    Adafruit_PWMServoDriver servo_actuator = Adafruit_PWMServoDriver();
 
 private:
     bool startActuator();
