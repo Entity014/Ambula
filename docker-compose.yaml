@@ -31,6 +31,7 @@ services:
       - DISPLAY=${DISPLAY:-:0}
       - QT_X11_NO_MITSHM=1
       - NVIDIA_DRIVER_CAPABILITIES=all
+      - ROS_DOMAIN_ID=${ROS_DOMAIN_ID:-15}
     devices:
       - /dev/bus/usb:/dev/bus/usb
     volumes:
@@ -87,11 +88,13 @@ services:
       - ./robot_ws:/home/robot_ws:rw
 
   uros-agent:
-    profiles: ["carrot", "radish", "main"]
+    # profiles: ["carrot", "radish", "main"]
     image: husarion/micro-ros-agent:jazzy-5.0.0-20240726
     <<: *ambula_base
     # volumes:
     #   - /dev:/dev
+    environment:
+      - ROS_DOMAIN_ID=${ROS_DOMAIN_ID:-15}
     devices:
       - /dev/ttyACM0:/dev/ttyACM0
     command: sleep infinity

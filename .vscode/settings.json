@@ -67,5 +67,12 @@
         "typeindex": "cpp",
         "typeinfo": "cpp"
     },
-    "cmake.sourceDirectory": "/home/xero/Ambula/robot_ws/src/ambula_bringup"
+    "cmake.sourceDirectory": "/home/xero/Ambula/robot_ws/src/ambula_bringup",
+    "ROS2.distro": "jazzy",
+    "python.autoComplete.extraPaths": [
+        "/opt/ros/jazzy/lib/python3.12/site-packages"
+    ],
+    "python.analysis.extraPaths": [
+        "/opt/ros/jazzy/lib/python3.12/site-packages"
+    ]
 }

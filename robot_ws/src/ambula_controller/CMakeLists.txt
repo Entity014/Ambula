@@ -23,11 +23,11 @@ install(
 )
 
 install(PROGRAMS
-    src/leg_fk.py
-    src/leg_ik.py
-    src/joint_state_command_merge.py
-    src/height_to_point.py
-    src/s_curve_command.py
+    src/joint_sim2real.py
+    src/forward_kinematic.py
+    src/inverse_kinematic.py
+    src/leg_joint_cmd.py
+    src/joint_smoother.py
     DESTINATION lib/${PROJECT_NAME}
 )
 

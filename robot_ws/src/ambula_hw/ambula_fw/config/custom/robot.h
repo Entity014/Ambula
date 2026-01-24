@@ -25,17 +25,6 @@
 #define PAYLOAD_PIN 26
 
 #define N_JOINTS 8
-enum JointIndex
-{
-    J_LEFT_WAIST = 0,
-    J_LEFT_HIP,
-    J_LEFT_KNEE,
-    J_LEFT_WHEEL,
-    J_RIGHT_WAIST,
-    J_RIGHT_HIP,
-    J_RIGHT_KNEE,
-    J_RIGHT_WHEEL
-};
 const char *JOINT_NAMES[N_JOINTS] = {
     "left_waist", "left_hip", "left_knee", "left_wheel",
     "right_waist", "right_hip", "right_knee", "right_wheel"};
@@ -46,5 +35,24 @@ const char *JOINT_NAMES[N_JOINTS] = {
 #define ODRV_LEFT_KNEE_ID 5   // Left Knee
 #define ODRV_RIGHT_WHEEL_ID 4 // Right Wheel
 #define ODRV_LEFT_WHEEL_ID 6  // Left Wheel
+
+#define MOTOR_TORQUE_CONSTANT 0.06858f
+#define ENCODER_CPR 16384.0f
+
+#define POS_GAIN_RIGHT_HIP 0.01f
+#define VEL_GAIN_RIGHT_HIP 0.0f
+#define VEL_INTEGRAL_GAIN_RIGHT_HIP 0.0f
+
+#define POS_GAIN_LEFT_HIP 0.0f
+#define VEL_GAIN_LEFT_HIP 0.0f
+#define VEL_INTEGRAL_GAIN_LEFT_HIP 0.0f
+
+#define POS_GAIN_RIGHT_KNEE 5.0f
+#define VEL_GAIN_RIGHT_KNEE 0.005f
+#define VEL_INTEGRAL_GAIN_RIGHT_KNEE 0.0f
+
+#define POS_GAIN_LEFT_KNEE 5.0f
+#define VEL_GAIN_LEFT_KNEE 0.005f
+#define VEL_INTEGRAL_GAIN_LEFT_KNEE 0.0f
 
 #endif

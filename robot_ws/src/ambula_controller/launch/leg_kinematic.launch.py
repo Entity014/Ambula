@@ -15,36 +15,11 @@ def generate_launch_description():
     )
 
     ld = LaunchDescription()
-    node_leg_fk = Node(
+    node_joint_sim2real = Node(
         package="ambula_controller",
-        executable="leg_fk.py",
+        executable="joint_sim2real.py",
         parameters=[{leg_kinematic_config_path}]
     )
-    node_leg_ik = Node(
-        package="ambula_controller",
-        executable="leg_ik.py",
-        parameters=[{leg_kinematic_config_path}]
-    )
-    node_joint_merge = Node(
-        package="ambula_controller",
-        executable="joint_state_command_merge.py",
-        parameters=[{leg_kinematic_config_path}]
-    )
-    node_height_to_pose = Node(
-        package="ambula_controller",
-        executable="height_to_point.py",
-        parameters=[{leg_kinematic_config_path}]
-    )
-    node_s_curve_command = Node(
-        package="ambula_controller",
-        executable="s_curve_command.py",
-        parameters=[{leg_kinematic_config_path}]
-    )
-    
-    ld.add_action(node_leg_fk)
-    ld.add_action(node_leg_ik)
-    ld.add_action(node_joint_merge)
-    ld.add_action(node_height_to_pose)
-    ld.add_action(node_s_curve_command)
 
+    ld.add_action(node_joint_sim2real)
     return ld

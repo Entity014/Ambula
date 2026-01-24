@@ -52,8 +52,44 @@
   gz_type_name: "gz.msgs.IMU"
   direction: "GZ_TO_ROS"
 
-- ros_topic_name: "/ambula/camera_position_cmd"
-  gz_topic_name: "camera_position_cmd"
+- ros_topic_name: "/ambula/left_hip_position_cmd"
+  gz_topic_name: "left_hip_position_cmd"
+  ros_type_name: "std_msgs/msg/Float64"
+  gz_type_name: "gz.msgs.Double"
+  direction: ROS_TO_GZ
+
+- ros_topic_name: "/ambula/right_hip_position_cmd"
+  gz_topic_name: "right_hip_position_cmd"
+  ros_type_name: "std_msgs/msg/Float64"
+  gz_type_name: "gz.msgs.Double"
+  direction: ROS_TO_GZ
+
+- ros_topic_name: "/ambula/left_knee_position_cmd"
+  gz_topic_name: "left_knee_position_cmd"
+  ros_type_name: "std_msgs/msg/Float64"
+  gz_type_name: "gz.msgs.Double"
+  direction: ROS_TO_GZ
+
+- ros_topic_name: "/ambula/right_knee_position_cmd"
+  gz_topic_name: "right_knee_position_cmd"
+  ros_type_name: "std_msgs/msg/Float64"
+  gz_type_name: "gz.msgs.Double"
+  direction: ROS_TO_GZ
+
+- ros_topic_name: "/ambula/left_wheel_velocity_cmd"
+  gz_topic_name: "left_wheel_velocity_cmd"
+  ros_type_name: "std_msgs/msg/Float64"
+  gz_type_name: "gz.msgs.Double"
+  direction: ROS_TO_GZ
+
+- ros_topic_name: "/ambula/right_wheel_velocity_cmd"
+  gz_topic_name: "right_wheel_velocity_cmd"
+  ros_type_name: "std_msgs/msg/Float64"
+  gz_type_name: "gz.msgs.Double"
+  direction: ROS_TO_GZ
+
+- ros_topic_name: "/ambula/pillar_position_cmd"
+  gz_topic_name: "pillar_position_cmd"
   ros_type_name: "std_msgs/msg/Float64"
   gz_type_name: "gz.msgs.Double"
   direction: ROS_TO_GZ

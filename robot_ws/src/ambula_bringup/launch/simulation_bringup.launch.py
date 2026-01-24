@@ -14,7 +14,7 @@ from ament_index_python.packages import get_package_share_directory
 def generate_launch_description():
     pkg_path = get_package_share_directory("ambula_bringup")
     gz_worlds_path = os.path.join(get_package_share_directory("ambula_world"))
-    world_path = os.path.join(gz_worlds_path, "worlds", "oa_test.sdf")
+    world_path = os.path.join(gz_worlds_path, "worlds", "plane.sdf")
     gui = "-r"
     for arg in sys.argv:
         if arg.startswith("gui:="):

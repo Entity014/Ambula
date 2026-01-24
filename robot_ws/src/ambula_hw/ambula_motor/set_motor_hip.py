@@ -25,7 +25,7 @@ def main():
     axis.motor.config.pole_pairs  = 7
     axis.motor.config.direction   = 1
     axis.motor.config.torque_constant = 8.23 / 120  # (Nm/A)
-    axis.sensorless_estimator.config.pm_flux_linkage = 5.51328895422 / (7 * 120)
+    axis.sensorless_estimator.config.pm_flux_linkage = 5.51328895422 / (axis.motor.config.pole_pairs * 120)
 
     # ==== Controller Config ====
     ctrl = axis.controller.config

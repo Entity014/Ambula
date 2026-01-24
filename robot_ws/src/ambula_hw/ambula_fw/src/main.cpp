@@ -29,6 +29,12 @@
 #include <sensor_msgs/msg/joint_state.h>
 #include <geometry_msgs/msg/twist.h>
 
+// ---------- ODrive CAN ----------
+#include "ODriveCAN.h"
+#include <FlexCAN_T4.h>
+#include "ODriveFlexCAN.hpp"
+struct ODriveStatus; // teensy compile hack
+
 enum JointIndex
 {
     J_LEFT_WAIST = 0,
@@ -141,12 +147,72 @@ void moveActuator();
 void publishData();
 bool createEntities();
 bool destroyEntities();
+void all_odrives_idle();
+void wheels_closed_loop_only_safe();
+void all_odrives_closed();
 
 struct timespec getTime();
 
 //------------------------------ < Rapid Define > -------------------------------------//
 
 float waist_arr[2] = {90.f, 90.f}; // left, right
+
+// ======================= CAN / ODrive ====================
+FlexCAN_T4<CAN1, RX_SIZE_256, TX_SIZE_16> can_intf;
+
+ODriveCAN odrv_right_hip(wrap_can_intf(can_intf), ODRV_RIGHT_HIP_ID);
+ODriveCAN odrv_left_hip(wrap_can_intf(can_intf), ODRV_LEFT_HIP_ID);
+ODriveCAN odrv_right_knee(wrap_can_intf(can_intf), ODRV_RIGHT_KNEE_ID);
+ODriveCAN odrv_left_knee(wrap_can_intf(can_intf), ODRV_LEFT_KNEE_ID);
+ODriveCAN odrv_right_wheel(wrap_can_intf(can_intf), ODRV_RIGHT_WHEEL_ID);
+ODriveCAN odrv_left_wheel(wrap_can_intf(can_intf), ODRV_LEFT_WHEEL_ID);
+
+ODriveCAN *ODRIVES[6] = {
+    &odrv_right_hip, &odrv_left_hip, &odrv_right_knee,
+    &odrv_left_knee, &odrv_right_wheel, &odrv_left_wheel};
+
+struct ODrvData
+{
+    Heartbeat_msg_t hb{};
+    Get_Encoder_Estimates_msg_t fb{};
+    bool got_hb = false, got_fb = false;
+};
+ODrvData D_right_hip, D_left_hip, D_right_knee, D_left_knee, D_right_wheel, D_left_wheel;
+
+bool request_state_with_retry(
+    ODriveCAN &drv, ODrvData &ud, ODriveAxisState desired_state,
+    uint32_t settle_ms,
+    uint32_t per_try_timeout_ms,
+    int max_retry);
+
+void onHeartbeat(Heartbeat_msg_t &msg, void *user_data)
+{
+    auto *d = static_cast<ODrvData *>(user_data);
+    d->hb = msg;
+    d->got_hb = true;
+}
+void onFeedback(Get_Encoder_Estimates_msg_t &msg, void *user_data)
+{
+    auto *d = static_cast<ODrvData *>(user_data);
+    d->fb = msg;
+    d->got_fb = true;
+}
+void onCanMessage(const CanMsg &m)
+{
+    for (auto *o : ODRIVES)
+        onReceive(m, *o);
+}
+
+bool setupCan()
+{
+    can_intf.begin();
+    can_intf.setBaudRate(CAN_BAUDRATE);
+    can_intf.setMaxMB(16);
+    can_intf.enableFIFO();
+    can_intf.enableFIFOInterrupt();
+    can_intf.onReceive(onCanMessage);
+    return true;
+}
 
 void setup()
 {
@@ -162,16 +228,58 @@ void setup()
         }
     }
 
-    bool servo_ok = servoActuator.init();
-    if (!servo_ok)
-    {
-        while (1)
-        {
-            flashLED(3);
-        }
-    }
-    servoActuator.setServoAngle(LEFT_WAIST_CH, waist_arr[0]);  // left waist
-    servoActuator.setServoAngle(RIGHT_WAIST_CH, waist_arr[1]); // right waist
+    // bool servo_ok = servoActuator.init();
+    // if (!servo_ok)
+    // {
+    //     while (1)
+    //     {
+    //         flashLED(3);
+    //     }
+    // }
+    // servoActuator.setServoAngle(LEFT_WAIST_CH, waist_arr[0]);  // left waist
+    // servoActuator.setServoAngle(RIGHT_WAIST_CH, waist_arr[1]); // right waist
+
+    // CAN & ODrive
+    // if (!setupCan())
+    // {
+    //     rclErrorLoop();
+    // }
+
+    // odrv_right_hip.onStatus(onHeartbeat, &D_right_hip);
+    // odrv_right_hip.onFeedback(onFeedback, &D_right_hip);
+    // odrv_left_hip.onStatus(onHeartbeat, &D_left_hip);
+    // odrv_left_hip.onFeedback(onFeedback, &D_left_hip);
+    // odrv_right_knee.onStatus(onHeartbeat, &D_right_knee);
+    // odrv_right_knee.onFeedback(onFeedback, &D_right_knee);
+    // odrv_left_knee.onStatus(onHeartbeat, &D_left_knee);
+    // odrv_left_knee.onFeedback(onFeedback, &D_left_knee);
+    // odrv_right_wheel.onStatus(onHeartbeat, &D_right_wheel);
+    // odrv_right_wheel.onFeedback(onFeedback, &D_right_wheel);
+    // odrv_left_wheel.onStatus(onHeartbeat, &D_left_wheel);
+    // odrv_left_wheel.onFeedback(onFeedback, &D_left_wheel);
+
+    // odrv_right_hip.setPosGain(POS_GAIN_RIGHT_HIP);
+    // odrv_right_hip.setVelGains(VEL_GAIN_RIGHT_HIP, VEL_INTEGRAL_GAIN_RIGHT_HIP);
+    // odrv_left_hip.setPosGain(POS_GAIN_LEFT_HIP);
+    // odrv_left_hip.setVelGains(VEL_GAIN_LEFT_HIP, VEL_INTEGRAL_GAIN_LEFT_HIP);
+    // odrv_right_knee.setPosGain(POS_GAIN_RIGHT_KNEE);
+    // odrv_right_knee.setVelGains(VEL_GAIN_RIGHT_KNEE, VEL_INTEGRAL_GAIN_RIGHT_KNEE);
+    // odrv_left_knee.setPosGain(POS_GAIN_LEFT_KNEE);
+    // odrv_left_knee.setVelGains(VEL_GAIN_LEFT_KNEE, VEL_INTEGRAL_GAIN_LEFT_KNEE);
+
+    // unsigned long t0 = millis();
+    // while (!(
+    //     D_right_hip.got_hb &&
+    //     D_left_hip.got_hb &&
+    //     D_left_knee.got_hb &&
+    //     D_right_knee.got_hb &&
+    //     D_left_wheel.got_hb &&
+    //     D_right_wheel.got_hb))
+    // {
+    //     pumpEvents(can_intf);
+    //     if (millis() - t0 > 2000)
+    //         break; // ไม่บล็อกนานเกิน
+    // }
 
     Serial.begin(115200);
     set_microros_serial_transports(Serial);
@@ -195,7 +303,7 @@ void loop()
         EXECUTE_EVERY_N_MS(200, connection_state = (RMW_RET_OK == rmw_uros_ping_agent(100, 1)) ? AGENT_CONNECTED : AGENT_DISCONNECTED;);
         if (connection_state == AGENT_CONNECTED)
         {
-            rclc_executor_spin_some(&executor, RCL_MS_TO_NS(100));
+            rclc_executor_spin_some(&executor, RCL_MS_TO_NS(5));
         }
         break;
     case AGENT_DISCONNECTED:
@@ -230,15 +338,19 @@ void robotCommandCallback(const void *msgin)
     {
     case IDLE:
         robot_state = IDLE;
+        all_odrives_idle();
         break;
     case SLIDE:
         robot_state = SLIDE;
+        wheels_closed_loop_only_safe();
         break;
     case OPERATING:
         robot_state = OPERATING;
+        all_odrives_closed();
         break;
     default:
         robot_state = IDLE;
+        all_odrives_idle();
         break;
     }
 }
@@ -256,21 +368,21 @@ void controlCallback(rcl_timer_t *timer, int64_t last_call_time)
     RCLC_UNUSED(last_call_time);
     if (timer != NULL)
     {
-        moveBase();
-        moveActuator();
+        // moveBase();
+        // moveActuator();
         publishData();
     }
 }
 
 void moveBase()
 {
-    if (((millis() - prev_cmd_time) >= 500))
-    {
-        twist_msg.linear.x = 0.0;
-        twist_msg.linear.y = 0.0;
-        twist_msg.angular.z = 0.0;
-        digitalWrite(LED_PIN, HIGH);
-    }
+    // if (((millis() - prev_cmd_time) >= 500))
+    // {
+    //     twist_msg.linear.x = 0.0;
+    //     twist_msg.linear.y = 0.0;
+    //     twist_msg.angular.z = 0.0;
+    //     digitalWrite(LED_PIN, HIGH);
+    // }
 
     Kinematics::rpm req_rpm = kinematics.getRPM(
         twist_msg.linear.x,
@@ -280,14 +392,26 @@ void moveBase()
     // TODO: รับค่า velocity
     debug_msg.linear.x = req_rpm.motor1 / 60.f;
     debug_msg.linear.y = req_rpm.motor2 / 60.f;
-    debug_msg.linear.z = req_rpm.motor3 / 60.f;
-    debug_msg.angular.x = req_rpm.motor4 / 60.f;
+    debug_msg.linear.z = POS_GAIN_RIGHT_HIP;
+    debug_msg.angular.x = constrain(leg_msg.linear.y, -10.0f, 0.0f);
 
     // TODO: สั่งความเร็วล้อ
-    // motor1_controller.spin(motor1_pid.compute(req_rpm.motor1, current_rpm1));
-    // motor2_controller.spin(motor2_pid.compute(req_rpm.motor2, current_rpm2));
-    // motor3_controller.spin(motor3_pid.compute(req_rpm.motor3, current_rpm3));
-    // motor4_controller.spin(motor4_pid.compute(req_rpm.motor4, current_rpm4));
+    if (robot_state == SLIDE || robot_state == OPERATING)
+    {
+        odrv_left_wheel.setVelocity(-req_rpm.motor1 / 60.f);
+        odrv_right_wheel.setVelocity(req_rpm.motor2 / 60.f);
+    }
+    else
+    {
+        odrv_left_wheel.setVelocity(0.0);
+        odrv_right_wheel.setVelocity(0.0);
+    }
+
+    if (robot_state == OPERATING)
+    {
+        // odrv_right_hip.setPosition(constrain(leg_msg.linear.x, -30.0f, 10.0f));
+        // odrv_right_knee.setPosition(constrain(leg_msg.linear.y, -10.0f, 0.0f));
+    }
 
     // Kinematics::velocities current_vel = kinematics.getVelocities(
     //     current_rpm1,
@@ -311,10 +435,11 @@ void moveActuator()
 
 void publishData()
 {
-    odom_msg = odometry.getData();
-    imu_msg = imuSensor.getData();
 
     struct timespec time_stamp = getTime();
+    odom_msg = odometry.getData();
+
+    imu_msg = imuSensor.getData();
 
     odom_msg.header.stamp.sec = time_stamp.tv_sec;
     odom_msg.header.stamp.nanosec = time_stamp.tv_nsec;
@@ -332,6 +457,39 @@ void publishData()
     joint_state_msg.position.data[J_RIGHT_WAIST] = waist_arr[1] * DEG_TO_RAD; // rad
     joint_state_msg.velocity.data[J_RIGHT_WAIST] = 0.0;
     joint_state_msg.effort.data[J_RIGHT_WAIST] = 0.0;
+
+    // // 2) ODrive feedback → hip/knee/wheel
+    // struct Map
+    // {
+    //     ODriveCAN *drv;
+    //     ODrvData *data;
+    //     int pos_idx;
+    // } maps[] = {
+    //     {&odrv_left_hip, &D_left_hip, J_LEFT_HIP},
+    //     {&odrv_left_knee, &D_left_knee, J_LEFT_KNEE},
+    //     {&odrv_left_wheel, &D_left_wheel, J_LEFT_WHEEL},
+    //     {&odrv_right_hip, &D_right_hip, J_RIGHT_HIP},
+    //     {&odrv_right_knee, &D_right_knee, J_RIGHT_KNEE},
+    //     {&odrv_right_wheel, &D_right_wheel, J_RIGHT_WHEEL}};
+
+    // const float REV2RAD = 2.0f * M_PI;
+
+    // for (auto &m : maps)
+    // {
+    //     Get_Encoder_Estimates_msg_t fb;
+    //     // timeout เล็กๆ 2–5 ms พอ (อย่าใช้ 0 เผื่อเน็ตช้า)
+    //     if (m.drv->getFeedback(fb, 3))
+    //     {
+    //         joint_state_msg.position.data[m.pos_idx] = fb.Pos_Estimate * REV2RAD;
+    //         joint_state_msg.velocity.data[m.pos_idx] = fb.Vel_Estimate * REV2RAD;
+    //         // joint_state_msg.effort.data[m.pos_idx] = 0.0;
+    //     }
+    //     else
+    //     {
+    //         // ถ้าพลาดรอบนี้ ใช้ค่าเดิม (ไม่ทับเป็นศูนย์ เพื่อไม่ให้กราฟกระโดด)
+    //         // ปล่อยว่างก็ได้เพราะเรากำลังรีเฟรชทุก 20 ms อยู่แล้ว
+    //     }
+    // }
 
     RCSOFTCHECK(rcl_publish(&imu_publisher, &imu_msg, NULL));
     RCSOFTCHECK(rcl_publish(&odom_publisher, &odom_msg, NULL));
@@ -416,7 +574,7 @@ bool createEntities()
         "payload/command"));
 
     // create timer for actuating the motors at 50 Hz (1000/20)
-    const unsigned int control_timeout = 20;
+    const unsigned int control_timeout = 5;
     RCCHECK(rclc_timer_init_default(
         &control_timer,
         &support,
@@ -468,8 +626,8 @@ bool destroyEntities()
     rmw_context_t *rmw_context = rcl_context_get_rmw_context(&support.context);
     (void)rmw_uros_set_context_entity_destroy_session_timeout(rmw_context, 0);
 
-    servoActuator.setServoAngle(LEFT_WAIST_CH, 90.0f);  // left waist
-    servoActuator.setServoAngle(RIGHT_WAIST_CH, 90.0f); // right waist
+    // servoActuator.setServoAngle(LEFT_WAIST_CH, 90.0f);  // left waist
+    // servoActuator.setServoAngle(RIGHT_WAIST_CH, 90.0f); // right waist
 
     rosidl_runtime_c__String__fini(&joint_state_msg.header.frame_id);
     rosidl_runtime_c__String__Sequence__fini(&joint_state_msg.name);
@@ -536,4 +694,100 @@ void flashLED(int n_times)
         delay(150);
     }
     delay(1000);
+}
+
+bool request_state_with_retry(
+    ODriveCAN &drv, ODrvData &ud, ODriveAxisState desired_state,
+    uint32_t settle_ms = 150, uint32_t per_try_timeout_ms = 400, int max_retry = 5)
+{
+    for (int k = 0; k < max_retry; ++k)
+    {
+        drv.clearErrors();           // ถ้าไม่อยาก clear ก็ลบทิ้งบรรทัดนี้ได้
+        drv.setState(desired_state); // ← ตอนนี้ชนิดตรงกับ API แล้ว
+
+        uint32_t t0 = millis();
+        while (millis() - t0 < settle_ms)
+        {
+            delay(10);
+            pumpEvents(can_intf);
+        }
+        t0 = millis();
+        while (millis() - t0 < per_try_timeout_ms)
+        {
+            pumpEvents(can_intf);
+            if (ud.got_hb && ud.hb.Axis_State == desired_state)
+                return true;
+            delay(5);
+        }
+    }
+    return false;
+}
+
+void all_odrives_idle()
+{
+    odrv_right_hip.setState(ODriveAxisState::AXIS_STATE_IDLE);
+    odrv_left_hip.setState(ODriveAxisState::AXIS_STATE_IDLE);
+    odrv_right_knee.setState(ODriveAxisState::AXIS_STATE_IDLE);
+    odrv_left_knee.setState(ODriveAxisState::AXIS_STATE_IDLE);
+    odrv_right_wheel.setState(ODriveAxisState::AXIS_STATE_IDLE);
+    odrv_left_wheel.setState(ODriveAxisState::AXIS_STATE_IDLE);
+}
+
+void wheels_closed_loop_only_safe()
+{
+    // ขา/สะโพก = IDLE
+    odrv_right_hip.setState(ODriveAxisState::AXIS_STATE_IDLE);
+    odrv_left_hip.setState(ODriveAxisState::AXIS_STATE_IDLE);
+    odrv_right_knee.setState(ODriveAxisState::AXIS_STATE_IDLE);
+    odrv_left_knee.setState(ODriveAxisState::AXIS_STATE_IDLE);
+
+    // ล้อ: เข้า CLOSED_LOOP_CONTROL แบบมี retry
+    bool ok_r = request_state_with_retry(
+        odrv_right_wheel, D_right_wheel,
+        ODriveAxisState::AXIS_STATE_CLOSED_LOOP_CONTROL);
+
+    bool ok_l = request_state_with_retry(
+        odrv_left_wheel, D_left_wheel,
+        ODriveAxisState::AXIS_STATE_CLOSED_LOOP_CONTROL);
+
+    // ถ้าด้านไหนไม่โอเค จะ revert เป็น IDLE ป้องกันการค้างครึ่งๆ
+    if (!ok_r)
+        odrv_right_wheel.setState(ODriveAxisState::AXIS_STATE_IDLE);
+    if (!ok_l)
+        odrv_left_wheel.setState(ODriveAxisState::AXIS_STATE_IDLE);
+}
+
+void all_odrives_closed()
+{
+    bool ok_rh = request_state_with_retry(
+        odrv_right_hip, D_right_hip,
+        ODriveAxisState::AXIS_STATE_CLOSED_LOOP_CONTROL);
+    // bool ok_lh = request_state_with_retry(
+    //     odrv_left_hip, D_left_hip,
+    //     ODriveAxisState::AXIS_STATE_CLOSED_LOOP_CONTROL);
+    // bool ok_rk = request_state_with_retry(
+    //     odrv_right_knee, D_right_knee,
+    //     ODriveAxisState::AXIS_STATE_CLOSED_LOOP_CONTROL);
+    // bool ok_lk = request_state_with_retry(
+    //     odrv_left_knee, D_left_knee,
+    //     ODriveAxisState::AXIS_STATE_CLOSED_LOOP_CONTROL);
+    bool ok_rw = request_state_with_retry(
+        odrv_right_wheel, D_right_wheel,
+        ODriveAxisState::AXIS_STATE_CLOSED_LOOP_CONTROL);
+    bool ok_lw = request_state_with_retry(
+        odrv_left_wheel, D_left_wheel,
+        ODriveAxisState::AXIS_STATE_CLOSED_LOOP_CONTROL);
+
+    if (!ok_rh)
+        odrv_right_hip.setState(ODriveAxisState::AXIS_STATE_IDLE);
+    // if (!ok_lh)
+    //     odrv_left_hip.setState(ODriveAxisState::AXIS_STATE_IDLE);
+    // if (!ok_rk)
+    //     odrv_right_knee.setState(ODriveAxisState::AXIS_STATE_IDLE);
+    // if (!ok_lk)
+    //     odrv_left_knee.setState(ODriveAxisState::AXIS_STATE_IDLE);
+    if (!ok_rw)
+        odrv_right_wheel.setState(ODriveAxisState::AXIS_STATE_IDLE);
+    if (!ok_lw)
+        odrv_left_wheel.setState(ODriveAxisState::AXIS_STATE_IDLE);
 }
