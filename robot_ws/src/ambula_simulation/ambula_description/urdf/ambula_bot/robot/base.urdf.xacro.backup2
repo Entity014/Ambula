@@ -1,0 +1,70 @@
+<?xml version="1.0"?>
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro">
+    <xacro:macro name="base" params="length width height mass">
+
+        <link name="base_link">
+            <visual>
+                <origin xyz="0 0 ${height/2}" rpy="0 0 0"/>
+                <geometry>
+                    <box size="${length} ${width} ${height}"/>
+                </geometry>
+                <material name="orange">
+                    <color rgba="1.0 0.3 0.0 1.0"/>
+                </material>
+            </visual>
+
+            <collision>
+                <origin xyz="0 0 ${height/2}" rpy="0 0 0"/>
+                <geometry>
+                    <box size="${length} ${width} ${height}"/>
+                </geometry>
+            </collision>
+
+            <inertial>
+                <origin xyz="0 0 ${height/2}" rpy="0 0 0"/>
+                <mass value="${mass}"/>
+                <inertia ixx="${(1/12) * mass * ((width  * width)  + (height * height))}" ixy="0.0" ixz="0.0" iyy="${(1/12) * mass * ((length * length) + (height * height))}" iyz="0.0" izz="${(1/12) * mass * ((length * length) + (width  * width))}"/>
+            </inertial>
+        </link>
+
+        <gazebo reference="base_link">
+            <visual>
+                <material>
+                    <ambient>0.8392 0.6314 0.0 1.0</ambient>
+                    <diffuse>0.8392 0.6314 0.0 1.0</diffuse>
+                    <specular>0.99 0.99 0.99 1.0</specular>
+                    <emissive>0.0 0.0 0.0 0.0</emissive>
+                </material>
+            </visual>
+        </gazebo>
+
+        <!-- <joint name="pillar1_to_base" type="revolute">
+            <axis xyz="0 1 0" />
+            <origin xyz="0 0 0" />
+            <parent link="pillar1_link" />
+            <child link="pillar2_link" />
+            <limit effort="100" lower="${-pi/2}" upper="${pi/2}" velocity="10" />
+            <dynamics damping="5.0" friction="3.0"/>
+        </joint> -->
+        
+        <joint name="pillar1_to_base" type="prismatic">
+            <axis xyz="0 0 1" />
+            <origin xyz="0.0 0.0 0.0" />
+            <parent link="pillar1_link" />
+            <child link="pillar2_link" />
+            <limit effort="100" lower="0.0" upper="2.5" velocity="10" />
+        </joint>
+        
+        <joint name="pillar2_to_base" type="revolute">
+            <axis xyz="0 0 1" />
+            <origin xyz="0 0 0" />
+            <parent link="pillar2_link" />
+            <child link="base_link" />
+            <limit effort="100" lower="${-pi/2}" upper="${pi/2}" velocity="10" />
+            <dynamics damping="5.0" friction="3.0"/>
+        </joint>
+
+
+    </xacro:macro>
+
+</robot>

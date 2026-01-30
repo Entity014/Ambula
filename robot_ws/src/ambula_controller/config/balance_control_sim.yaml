@@ -1,0 +1,23 @@
+pd_balance_from_state:
+  ros__parameters:
+    state_topic: /ambula/state/estimation
+    state_timeout_sec: 0.2
+
+    left_wheel_cmd_topic: /ambula/left_wheel_velocity_cmd
+    right_wheel_cmd_topic: /ambula/right_wheel_velocity_cmd
+
+    kp_pitch: 6.0
+    kd_pitch: 0.25
+
+    use_velocity_outer_loop: false
+    kv: 0.0
+    v_ref: 0.0
+
+    pitch_ref_deg: 0.0
+    pitch_ref_max_deg: 8.0
+    abort_pitch_deg: 25.0
+
+    cmd_max: 8.0
+    dcmd_max: 60.0
+
+    control_rate_hz: 200.0

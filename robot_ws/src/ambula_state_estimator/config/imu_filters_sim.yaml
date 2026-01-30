@@ -1,0 +1,32 @@
+imu_orientation_to_euler_raw:
+  ros__parameters:
+    imu_in_topic: "/imu/data_raw"
+    imu_euler_out_topic: "/imu/data_raw/euler"
+    axes: "sxyz"
+
+imu_orientation_to_euler_complementary:
+  ros__parameters:
+    imu_in_topic: "/imu/complementary"
+    imu_euler_out_topic: "/imu/complementary/euler"
+    axes: "sxyz"
+
+diff_drive_kinematics:
+  ros__parameters:
+    joint_state_topic: /joint_states/hardware
+    odom_topic: /odom/data_raw
+
+    left_wheel_joint: left_wheel
+    right_wheel_joint: right_wheel
+
+    wheel_radius: 0.075
+    wheel_separation: 0.40
+
+    odom_frame: odom
+    base_frame: base_link
+
+    use_position_if_no_velocity: true
+
+    pose_cov_xy: 0.02
+    pose_cov_yaw: 0.05
+    twist_cov_v: 0.05
+    twist_cov_yawrate: 0.05

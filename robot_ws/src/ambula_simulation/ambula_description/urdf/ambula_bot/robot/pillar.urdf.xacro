@@ -1,0 +1,64 @@
+<?xml version="1.0"?>
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro">
+    <xacro:macro name="pillar" params="length width height mass">
+        <link name="world" />
+
+        <link name="pillar1_link">
+            <visual>
+                <origin xyz="0 0 ${height/2}" rpy="0 0 0"/>
+                <geometry>
+                    <box size="${length} ${width} ${height}"/>
+                </geometry>
+                <material name="orange">
+                    <color rgba="1.0 0.3 0.0 1.0"/>
+                </material>
+            </visual>
+
+            <collision>
+                <origin xyz="0 0 ${height/2}" rpy="0 0 0"/>
+                <geometry>
+                    <box size="${length} ${width} ${height}"/>
+                </geometry>
+            </collision>
+
+            <inertial>
+                <origin xyz="0 0 ${height/2}" rpy="0 0 0"/>
+                <mass value="${mass}"/>
+                <inertia ixx="${(1/12) * mass * ((width  * width)  + (height * height))}" ixy="0.0" ixz="0.0" iyy="${(1/12) * mass * ((length * length) + (height * height))}" iyz="0.0" izz="${(1/12) * mass * ((length * length) + (width  * width))}"/>
+            </inertial>
+        </link>
+        <link name="pillar2_link">
+            <visual>
+                <origin xyz="0 0 ${height/2}" rpy="0 0 0"/>
+                <geometry>
+                    <box size="${length} ${width} ${height}"/>
+                </geometry>
+                <material name="orange">
+                    <color rgba="1.0 0.3 0.0 1.0"/>
+                </material>
+            </visual>
+
+            <collision>
+                <origin xyz="0 0 ${height/2}" rpy="0 0 0"/>
+                <geometry>
+                    <box size="${length} ${width} ${height}"/>
+                </geometry>
+            </collision>
+
+            <inertial>
+                <origin xyz="0 0 ${height/2}" rpy="0 0 0"/>
+                <mass value="${mass}"/>
+                <inertia ixx="${(1/12) * mass * ((width  * width)  + (height * height))}" ixy="0.0" ixz="0.0" iyy="${(1/12) * mass * ((length * length) + (height * height))}" iyz="0.0" izz="${(1/12) * mass * ((length * length) + (width  * width))}"/>
+            </inertial>
+        </link>
+
+        <joint name="world_to_base" type="fixed">
+            <!-- <origin rpy="0 0 0" xyz="0 0 1.0" /> -->
+            <origin rpy="0 0 0" xyz="0 0 0.0" />
+            <parent link="world" />
+            <child link="pillar1_link" />
+        </joint>
+
+    </xacro:macro>
+
+</robot>

@@ -1,0 +1,175 @@
+joint_state_hardware_order:
+  ros__parameters:
+    input_topic: /joint_states
+    output_topic: /joint_states/hardware
+
+    joint_order:
+      - left_waist
+      - left_hip
+      - left_knee
+      - left_wheel
+      - right_waist
+      - right_hip
+      - right_knee
+      - right_wheel
+
+    remove_names:
+      - world_to_base
+      - left_passive_wheel_joint
+      - right_passive_wheel_joint
+
+left_leg_forward_kinematics:
+  ros__parameters:
+    input_topic: /joint_states/hardware
+    output_topic: /ambula/left_foot_point
+
+    base_frame: base_link
+    rr_foot_frame: left_foot
+    publish_tf: true
+
+    waist_name: left_waist
+    hip_name: left_hip
+    knee_name: left_knee
+
+    waist_offset_deg: 0.0
+    hip_offset_deg: 180.0
+    knee_offset_deg: 0.0
+
+    hip_x: 0.0
+    hip_y: 0.2
+    hip_z: 0.1
+
+    L1: 0.28
+    L2: 0.30
+    L3: 0.0
+
+    align_y: 1.5707963267948966
+
+right_leg_forward_kinematics:
+  ros__parameters:
+    input_topic: /joint_states/hardware
+    output_topic: /ambula/right_foot_point
+
+    base_frame: base_link
+    rr_foot_frame: right_foot
+    publish_tf: true
+
+    waist_name: right_waist
+    hip_name: right_hip
+    knee_name: right_knee
+
+    waist_offset_deg: 0.0
+    hip_offset_deg: 180.0
+    knee_offset_deg: 0.0
+
+    hip_x: 0.0
+    hip_y: -0.2
+    hip_z: 0.1
+
+    L1: 0.28
+    L2: 0.30
+    L3: 0.0
+
+    align_y: 1.5707963267948966
+
+left_leg_inverse_kinematics:
+  ros__parameters:
+    target_topic: /ambula/left_foot_target
+    cmd_topic: /ambula/left_leg_joint_cmd
+
+    waist_name: left_waist
+    hip_name: left_hip
+    knee_name: left_knee
+
+    waist_offset_deg: 0.0
+    hip_offset_deg: 180.0
+    knee_offset_deg: 0.0
+
+    hip_x: 0.0
+    hip_y: 0.2
+    hip_z: 0.1
+
+    L1: 0.28
+    L2: 0.30
+    L3: 0.0
+
+    elbow: "down"        # "up" or "down"
+
+    print_deg: false
+
+right_leg_inverse_kinematics:
+  ros__parameters:
+    target_topic: /ambula/right_foot_target
+    cmd_topic: /ambula/right_leg_joint_cmd
+
+    waist_name: right_waist
+    hip_name: right_hip
+    knee_name: right_knee
+
+    waist_offset_deg: 0.0
+    hip_offset_deg: 180.0
+    knee_offset_deg: 0.0
+
+    hip_x: 0.0
+    hip_y: -0.2
+    hip_z: 0.1
+
+    L1: 0.28
+    L2: 0.30
+    L3: 0.0
+
+    elbow: "down"        # "up" or "down"
+
+    print_deg: false
+
+left_leg_joint_cmd_bridge:
+  ros__parameters:
+    in_topic: /ambula/left_leg_joint_cmd_smoothed
+    hip_topic: /ambula/left_hip_position_cmd
+    knee_topic: /ambula/left_knee_position_cmd
+
+    hip_name: left_hip
+    knee_name: left_knee
+
+right_leg_joint_cmd_bridge:
+  ros__parameters:
+    in_topic: /ambula/right_leg_joint_cmd_smoothed
+    hip_topic: /ambula/right_hip_position_cmd
+    knee_topic: /ambula/right_knee_position_cmd
+
+    hip_name: right_hip
+    knee_name: right_knee
+
+left_leg_joint_smoother:
+  ros__parameters:
+    state_topic: /joint_states/hardware
+    target_topic: /ambula/left_leg_joint_cmd
+    out_topic: /ambula/left_leg_joint_cmd_smoothed
+    joint_names: [left_hip, left_knee]
+
+    profile: s_curve       # rectangle | trapezoid | s_curve
+
+    v_max: [5.0, 5.0]      # rad/s
+    a_max: [10.0, 10.0]    # rad/s^2
+    j_max: [100.0, 100.0]  # rad/s^3 (ใช้เฉพาะ s_curve)
+
+    publish_rate: 200.0
+    dt_profile: 0.002
+    frame_id: base_link
+
+right_leg_joint_smoother:
+  ros__parameters:
+    state_topic: /joint_states/hardware
+    target_topic: /ambula/right_leg_joint_cmd
+    out_topic: /ambula/right_leg_joint_cmd_smoothed
+    joint_names: [right_hip, right_knee]
+
+    profile: s_curve       # rectangle | trapezoid | s_curve
+
+    v_max: [5.0, 5.0]      # rad/s
+    a_max: [10.0, 10.0]    # rad/s^2
+    j_max: [100.0, 100.0]  # rad/s^3 (ใช้เฉพาะ s_curve)
+
+    publish_rate: 200.0
+    dt_profile: 0.002
+    frame_id: base_link

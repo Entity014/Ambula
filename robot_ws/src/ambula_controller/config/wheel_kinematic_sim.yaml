@@ -1,0 +1,9 @@
+cmd_vel_to_wheel:
+  ros__parameters:
+    wheel_radius: 0.075
+    wheel_separation: 0.40
+    output_unit: m_s # 'rad_s' or 'm_s'
+
+    cmd_vel_topic: /cmd_vel
+    left_wheel_topic: /ambula/left_wheel_velocity_cmd
+    right_wheel_topic: /ambula/right_wheel_velocity_cmd

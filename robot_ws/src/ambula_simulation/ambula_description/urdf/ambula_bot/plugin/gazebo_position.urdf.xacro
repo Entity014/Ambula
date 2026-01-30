@@ -1,0 +1,83 @@
+<?xml version="1.0"?>
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro">
+
+    <gazebo>
+        <plugin name="gz::sim::systems::JointPositionController" filename="gz-sim-joint-position-controller-system">
+            <joint_name>left_hip_joint</joint_name>
+            <initial_position>-2.0</initial_position>
+            <topic>left_hip_position_cmd</topic>
+            <p_gain>250.0</p_gain>
+            <i_gain>50.0</i_gain>
+            <d_gain>0.01</d_gain>
+        </plugin>
+        <plugin name="gz::sim::systems::JointPositionController" filename="gz-sim-joint-position-controller-system">
+            <joint_name>right_hip_joint</joint_name>
+            <initial_position>-2.0</initial_position>
+            <topic>right_hip_position_cmd</topic>
+            <p_gain>250.0</p_gain>
+            <i_gain>50.0</i_gain>
+            <d_gain>0.01</d_gain>
+        </plugin>
+        <plugin name="gz::sim::systems::JointPositionController" filename="gz-sim-joint-position-controller-system">
+            <joint_name>left_knee_joint</joint_name>
+            <initial_position>-2.85</initial_position>
+            <topic>left_knee_position_cmd</topic>
+            <p_gain>250.0</p_gain>
+            <i_gain>50.0</i_gain>
+            <d_gain>0.01</d_gain>
+        </plugin>
+        <plugin name="gz::sim::systems::JointPositionController" filename="gz-sim-joint-position-controller-system">
+            <joint_name>right_knee_joint</joint_name>
+            <initial_position>-2.85</initial_position>
+            <topic>right_knee_position_cmd</topic>
+            <p_gain>250.0</p_gain>
+            <i_gain>50.0</i_gain>
+            <d_gain>0.01</d_gain>
+        </plugin>
+        <plugin name="gz::sim::systems::JointController" filename="gz-sim-joint-controller-system">
+            <joint_name>left_wheel_joint</joint_name>
+            <topic>left_wheel_velocity_cmd</topic>
+            <p_gain>40.0</p_gain>
+            <i_gain>1.0</i_gain>
+            <d_gain>0.01</d_gain>
+        </plugin>
+        <plugin name="gz::sim::systems::JointController" filename="gz-sim-joint-controller-system">
+            <joint_name>right_wheel_joint</joint_name>
+            <topic>right_wheel_velocity_cmd</topic>
+            <p_gain>40.0</p_gain>
+            <i_gain>1.0</i_gain>
+            <d_gain>0.01</d_gain>
+        </plugin>
+        <plugin name="gz::sim::systems::JointPositionController" filename="gz-sim-joint-position-controller-system">
+            <joint_name>pillar1_to_base</joint_name>
+            <initial_position>0.0</initial_position>
+            <topic>pillar1_position_cmd</topic>
+            <p_gain>40.0</p_gain>
+            <i_gain>1.0</i_gain>
+            <d_gain>0.01</d_gain>
+        </plugin>
+        <plugin name="gz::sim::systems::JointPositionController" filename="gz-sim-joint-position-controller-system">
+            <joint_name>pillar2_to_base</joint_name>
+            <initial_position>0.0</initial_position>
+            <topic>pillar2_position_cmd</topic>
+            <p_gain>40.0</p_gain>
+            <i_gain>1.0</i_gain>
+            <d_gain>0.01</d_gain>
+        </plugin>
+
+
+
+
+        <plugin filename="gz-sim-joint-state-publisher-system" name="gz::sim::systems::JointStatePublisher">
+            <topic>joint_states</topic>
+            <topic>left_hip_joint</topic>
+            <topic>right_hip_joint</topic>
+            <topic>left_knee_joint</topic>
+            <topic>right_knee_joint</topic>
+            <topic>left_wheel_joint</topic>
+            <topic>right_wheel_joint</topic>
+        </plugin>
+    </gazebo>
+
+
+</robot>

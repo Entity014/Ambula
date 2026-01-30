@@ -1,0 +1,51 @@
+<?xml version="1.0"?>
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro">
+    <xacro:macro name="knee" params="side length width height pos_x pos_y pos_z mass">
+        <link name="${side}_knee_link">
+            <visual>
+                <origin xyz="0 0 ${height/2}" rpy="0 0 0"/>
+                <geometry>
+                    <box size="${length} ${width} ${height}"/>
+                </geometry>
+                <material name="orange">
+                    <color rgba="1.0 0.3 0.0 1.0"/>
+                </material>
+            </visual>
+
+            <collision>
+                <origin xyz="0 0 ${height/2}" rpy="0 0 0"/>
+                <geometry>
+                    <box size="${length} ${width} ${height}"/>
+                </geometry>
+            </collision>
+
+            <inertial>
+                <origin xyz="0 0 ${height/2}" rpy="0 0 0"/>
+                <mass value="${mass}"/>
+                <inertia ixx="${(1/12) * mass * ((width  * width)  + (height * height))}" ixy="0.0" ixz="0.0" iyy="${(1/12) * mass * ((length * length) + (height * height))}" iyz="0.0" izz="${(1/12) * mass * ((length * length) + (width  * width))}"/>
+            </inertial>
+        </link>
+
+        <gazebo reference="base_link">
+            <visual>
+                <material>
+                    <ambient>0.8392 0.6314 0.0 1.0</ambient>
+                    <diffuse>0.8392 0.6314 0.0 1.0</diffuse>
+                    <specular>0.99 0.99 0.99 1.0</specular>
+                    <emissive>0.0 0.0 0.0 0.0</emissive>
+                </material>
+            </visual>
+        </gazebo>
+
+        <joint name="${side}_knee_joint" type="revolute">
+            <axis xyz="0 1 0" />
+            <origin xyz="${pos_x} ${pos_y} ${pos_z}" />
+            <parent link="${side}_hip_link" />
+            <child link="${side}_knee_link" />
+            <limit effort="1000" lower="${-pi}" upper="0.0" velocity="10" />
+            <dynamics damping="5.0" friction="3.0"/>
+        </joint>
+
+    </xacro:macro>
+
+</robot>
