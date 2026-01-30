@@ -10,8 +10,8 @@
 #define MOTOR_MAX_RPM 800.0f
 #define MAX_RPM_RATIO 0.8f
 #define RPM_RATIO 1.0f
-#define WHEEL_DIAMETER 0.15f     // meter
-#define LR_WHEELS_DISTANCE 0.45f // meter
+#define WHEEL_DIAMETER 0.15f    // meter
+#define LR_WHEELS_DISTANCE 0.4f // meter
 
 #define SERVOMIN 150  // This is the 'minimum' pulse length count (out of 4096)
 #define SERVOMAX 600  // This is the 'maximum' pulse length count (out of 4096)
@@ -29,12 +29,12 @@ const char *JOINT_NAMES[N_JOINTS] = {
     "left_waist", "left_hip", "left_knee", "left_wheel",
     "right_waist", "right_hip", "right_knee", "right_wheel"};
 
-#define ODRV_RIGHT_HIP_ID 0   // Right Hip
-#define ODRV_LEFT_HIP_ID 2    // Left Hip
-#define ODRV_RIGHT_KNEE_ID 3  // Right Knee
-#define ODRV_LEFT_KNEE_ID 5   // Left Knee
-#define ODRV_RIGHT_WHEEL_ID 4 // Right Wheel
-#define ODRV_LEFT_WHEEL_ID 6  // Left Wheel
+#define ODRV_RIGHT_HIP_ID 0   // Right Hip [0]
+#define ODRV_LEFT_HIP_ID 2    // Left Hip [2]
+#define ODRV_RIGHT_KNEE_ID 3  // Right Knee [3]
+#define ODRV_LEFT_KNEE_ID 5   // Left Knee [5]
+#define ODRV_RIGHT_WHEEL_ID 4 // Right Wheel [4]
+#define ODRV_LEFT_WHEEL_ID 6  // Left Wheel [1]
 
 #define MOTOR_TORQUE_CONSTANT 0.06858f
 #define ENCODER_CPR 16384.0f

@@ -10,7 +10,7 @@
   <xacro:include filename="$(find ambula_description)/urdf/ambula_bot/plugin/gazebo_position.urdf.xacro" />
   
   <!-- Robot -->
-  <xacro:pillar length="${pillar_length}" width="${pillar_width}" height="${pillar_height}" mass="${pillar_mass}"/>
+  <!-- <xacro:pillar length="${pillar_length}" width="${pillar_width}" height="${pillar_height}" mass="${pillar_mass}"/> -->
   <xacro:base length="${base_length}" width="${base_width}" height="${base_height}" mass="${base_mass}"/>
   <xacro:hip side="left" length="${hip_length}" width="${hip_width}" height="${hip_height}" pos_x="${left_hip_pos_x}" pos_y="${left_hip_pos_y}" pos_z="${left_hip_pos_z}" mass="${hip_mass}"/>
   <xacro:hip side="right" length="${hip_length}" width="${hip_width}" height="${hip_height}" pos_x="${right_hip_pos_x}" pos_y="${right_hip_pos_y}" pos_z="${right_hip_pos_z}" mass="${hip_mass}"/>
@@ -22,8 +22,8 @@
   <xacro:passive_wheel side="right" radius="${passive_wheel_radius}" width="${passive_wheel_width}" pos_x="${right_passive_wheel_pos_x}" pos_y="${right_passive_wheel_pos_y}" pos_z="${right_passive_wheel_pos_z}" mass="${passive_wheel_mass}"/>
 
   <!-- Sensor -->
-  <!-- <xacro:include filename="$(find ambula_description)/urdf/ambula_bot/sensor/depth_camera.urdf.xacro" /> -->
-  <!-- <xacro:include filename="$(find ambula_description)/urdf/ambula_bot/sensor/imu.urdf.xacro" /> -->
+  <xacro:include filename="$(find ambula_description)/urdf/ambula_bot/sensor/depth_camera.urdf.xacro" />
+  <xacro:include filename="$(find ambula_description)/urdf/ambula_bot/sensor/imu.urdf.xacro" />
 
   <!-- <xacro:ambula_ros2_control/> -->
 

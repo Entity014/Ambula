@@ -46,7 +46,7 @@
   gz_type_name: "gz.msgs.NavSat"
   direction: "GZ_TO_ROS"
 
-- ros_topic_name: "/ambula/imu"
+- ros_topic_name: "/imu/data_raw"
   gz_topic_name: "/imu"
   ros_type_name: "sensor_msgs/msg/Imu"
   gz_type_name: "gz.msgs.IMU"
@@ -88,8 +88,14 @@
   gz_type_name: "gz.msgs.Double"
   direction: ROS_TO_GZ
 
-- ros_topic_name: "/ambula/pillar_position_cmd"
-  gz_topic_name: "pillar_position_cmd"
+- ros_topic_name: "/ambula/pillar1_position_cmd"
+  gz_topic_name: "pillar1_position_cmd"
+  ros_type_name: "std_msgs/msg/Float64"
+  gz_type_name: "gz.msgs.Double"
+  direction: ROS_TO_GZ
+
+- ros_topic_name: "/ambula/pillar2_position_cmd"
+  gz_topic_name: "pillar2_position_cmd"
   ros_type_name: "std_msgs/msg/Float64"
   gz_type_name: "gz.msgs.Double"
   direction: ROS_TO_GZ

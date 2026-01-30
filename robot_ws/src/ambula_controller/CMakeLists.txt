@@ -28,6 +28,8 @@ install(PROGRAMS
     src/inverse_kinematic.py
     src/leg_joint_cmd.py
     src/joint_smoother.py
+    src/wheel_cmd.py
+    src/pd_balance.py
     DESTINATION lib/${PROJECT_NAME}
 )
 

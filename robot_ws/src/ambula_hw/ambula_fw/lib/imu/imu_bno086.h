@@ -37,32 +37,29 @@ public:
 
     void pollOnce()
     {
-        if (!bno086.getSensorEvent())
-            return;
-
-        switch (bno086.getSensorEventID())
+        if (bno086.getSensorEvent())
         {
-        case SENSOR_REPORTID_ACCELEROMETER:
-            accel_.x = bno086.getAccelX(); // m/s^2
-            accel_.y = bno086.getAccelY();
-            accel_.z = bno086.getAccelZ();
-            break;
+            switch (bno086.getSensorEventID())
+            {
+            case SENSOR_REPORTID_ACCELEROMETER:
+                accel_.x = bno086.getAccelX(); // m/s^2
+                accel_.y = bno086.getAccelY();
+                accel_.z = bno086.getAccelZ();
+                break;
 
-        case SENSOR_REPORTID_GYROSCOPE_CALIBRATED:
-            gyro_.x = bno086.getGyroX(); // rad/s
-            gyro_.y = bno086.getGyroY();
-            gyro_.z = bno086.getGyroZ();
-            break;
+            case SENSOR_REPORTID_GYRO_INTEGRATED_ROTATION_VECTOR:
+                gyro_.x = bno086.getGyroIntegratedRVangVelX();
+                gyro_.y = bno086.getGyroIntegratedRVangVelY();
+                gyro_.z = bno086.getGyroIntegratedRVangVelZ();
+                ori_.x = bno086.getGyroIntegratedRVI();
+                ori_.y = bno086.getGyroIntegratedRVJ();
+                ori_.z = bno086.getGyroIntegratedRVK();
+                ori_.w = bno086.getGyroIntegratedRVReal();
+                break;
 
-        case SENSOR_REPORTID_ROTATION_VECTOR:
-            ori_.x = bno086.getQuatI();
-            ori_.y = bno086.getQuatJ();
-            ori_.z = bno086.getQuatK();
-            ori_.w = bno086.getQuatReal();
-            break;
-
-        default:
-            break;
+            default:
+                break;
+            }
         }
     }
 
@@ -78,9 +75,7 @@ public:
 
         if (!bno086.enableAccelerometer())
             return false;
-        if (!bno086.enableGyro())
-            return false;
-        if (!bno086.enableRotationVector())
+        if (!bno086.enableGyroIntegratedRotationVector())
             return false;
 
         return true;

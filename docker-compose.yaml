@@ -7,6 +7,7 @@ x-ambula-base: &ambula_base
   stop_grace_period: 1s
   environment:
     - ROS_DOMAIN_ID=${ROS_DOMAIN_ID:-15}
+    - RMW_IMPLEMENTATION=rmw_fastrtps_cpp
 
 services:
   ambula_main_compose:

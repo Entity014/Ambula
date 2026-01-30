@@ -19,6 +19,9 @@ def generate_launch_description():
     for arg in sys.argv:
         if arg.startswith("gui:="):
             gui = str(arg.split(":=")[1])
+    
+    controller_pkg_path = get_package_share_directory("ambula_controller")
+    state_estimator_pkg_path = get_package_share_directory("ambula_state_estimator")
 
     gazebo_launch = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
@@ -37,9 +40,29 @@ def generate_launch_description():
         )
     )
 
+    leg_kinematic_sim_launch = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource(
+            [PathJoinSubstitution([controller_pkg_path, "launch", "leg_kinematic_sim.launch.py"])]
+        )
+    )
+
+    wheel_kinematic_sim_launch = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource(
+            [PathJoinSubstitution([controller_pkg_path, "launch", "wheel_kinematic_sim.launch.py"])]
+        )
+    )
+    state_estimation_launch = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource(
+            [PathJoinSubstitution([state_estimator_pkg_path, "launch", "state_estimation_sim.launch.py"])]
+        )
+    )
+
     return LaunchDescription(
         [
             gazebo_launch,
             spawn_ambula_launch,
+            leg_kinematic_sim_launch,
+            wheel_kinematic_sim_launch,
+            state_estimation_launch,
         ]
     )

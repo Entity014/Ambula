@@ -23,6 +23,10 @@ install(
 )
 
 install(PROGRAMS
+    src/imu_orientation_to_euler.py
+    src/diff_drive_kinematics.py
+    src/height_estimator.py
+    src/state_vector.py
     DESTINATION lib/${PROJECT_NAME}
 )
 

@@ -573,7 +573,7 @@ bool createEntities()
         ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, Bool),
         "payload/command"));
 
-    // create timer for actuating the motors at 50 Hz (1000/20)
+    // create timer for actuating the motors at 200 Hz (1000/5 ms)
     const unsigned int control_timeout = 5;
     RCCHECK(rclc_timer_init_default(
         &control_timer,
