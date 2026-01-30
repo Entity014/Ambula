@@ -27,19 +27,20 @@ def main():
     axis.motor.config.torque_constant = 8.23 / 120  # (Nm/A)
     axis.sensorless_estimator.config.pm_flux_linkage = 5.51328895422 / (7 * 120)
 
-    # ==== Controller Config ====
-    ctrl = axis.controller.config
-    ctrl.pos_gain            = 20.0
-    ctrl.vel_gain            = 0.05
-    ctrl.vel_integrator_gain = 0.03
-    ctrl.control_mode        = ControlMode.POSITION_CONTROL
-    ctrl.vel_limit           = 14.0    # rev/s
-
     # ==== Encoder Config (HALL SENSOR) ====
     axis.encoder.config.mode = EncoderMode.HALL
     axis.encoder.config.cpr = 6 * 7  # 6 hall sensor * pole_pairs
     axis.encoder.config.calib_range = 0.05
     axis.encoder.config.use_index = False
+
+    # ==== Controller Config ====
+    ctrl = axis.controller.config
+    ctrl.pos_gain            = 1.0
+    ctrl.vel_gain            = 0.02 * axis.motor.config.torque_constant * axis.encoder.config.cpr
+    ctrl.vel_integrator_gain = 0.1 * axis.motor.config.torque_constant * axis.encoder.config.cpr
+    ctrl.control_mode        = ControlMode.VELOCITY_CONTROL
+    ctrl.vel_limit           = 14.0    # rev/s
+
 
     # ==== Save Configuration ก่อนเริ่ม Calib ====
     print("💾 บันทึก config ก่อนเริ่ม Calibration...")
