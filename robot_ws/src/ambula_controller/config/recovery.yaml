@@ -1,0 +1,38 @@
+stand_feedforward:
+  ros__parameters:
+
+    # -----------------------------
+    # cmd_vel interface
+    # -----------------------------
+    cmd_vel_topic: "/cmd_vel"
+
+    # control loop
+    control_hz: 100.0
+
+    # -----------------------------
+    # One-cycle rocking profile
+    # -----------------------------
+    # peak forward/backward velocity
+    # NOTE:
+    #  - ถ้า diff_drive_controller → หน่วย m/s
+    #  - ถ้า custom controller → ตรวจว่าตีความ linear.x เป็นอะไร
+    v_peak: 3.48           # [m/s]
+
+    # duration of each segment
+    forward_time: 0.1    # [s] เดินหน้า
+    backward_time: 0.3   # [s] ถอยหลัง
+
+    # ramp up/down inside each segment
+    ramp_time: 0.05       # [s] กัน jerk / slip
+
+    # keep yaw zero for stand assist
+    yaw_rate: 0.0         # [rad/s]
+
+    # -----------------------------
+    # IMU safety (strongly recommended)
+    # -----------------------------
+    use_imu_safety: false
+    imu_topic: "/imu/data"
+
+    # stop immediately if |pitch| > limit
+    pitch_limit_deg: 22.0

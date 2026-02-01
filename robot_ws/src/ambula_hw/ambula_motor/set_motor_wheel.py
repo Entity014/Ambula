@@ -36,8 +36,8 @@ def main():
     # ==== Controller Config ====
     ctrl = axis.controller.config
     ctrl.pos_gain            = 1.0
-    ctrl.vel_gain            = 0.02 * axis.motor.config.torque_constant * axis.encoder.config.cpr
-    ctrl.vel_integrator_gain = 0.1 * axis.motor.config.torque_constant * axis.encoder.config.cpr
+    ctrl.vel_gain            = 0.025 * axis.motor.config.torque_constant * axis.encoder.config.cpr # 0.025 [R] 0.05 [L]
+    ctrl.vel_integrator_gain = 0.18 * axis.motor.config.torque_constant * axis.encoder.config.cpr # 0.16 [R] 0.18 [L]
     ctrl.control_mode        = ControlMode.VELOCITY_CONTROL
     ctrl.vel_limit           = 14.0    # rev/s
 

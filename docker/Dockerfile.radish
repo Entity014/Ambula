@@ -1,5 +1,5 @@
 ARG ROS_DISTRO=jazzy
-FROM osrf/ros:${ROS_DISTRO}-desktop as base
+FROM ros:${ROS_DISTRO}-ros-base-noble as base
 
 ENV ROS_DISTRO=${ROS_DISTRO}
 ENV DEBIAN_FRONTEND=noninteractive
@@ -66,11 +66,6 @@ RUN apt-get update && apt-get install -y \
 
 
 WORKDIR /home
-RUN curl https://packages.osrfoundation.org/gazebo.gpg --output /usr/share/keyrings/pkgs-osrf-archive-keyring.gpg
-RUN echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/pkgs-osrf-archive-keyring.gpg] http://packages.osrfoundation.org/gazebo/ubuntu-stable $(lsb_release -cs) main" | sudo tee /etc/apt/sources.list.d/gazebo-stable.list > /dev/null
-RUN apt-get update --fix-missing
-RUN apt-get install -y gz-harmonic 
-
 
 # Python dependencies
 RUN pip3 install --no-cache-dir --break-system-packages --ignore-installed sympy \

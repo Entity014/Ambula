@@ -15,11 +15,26 @@ def generate_launch_description():
     )
 
     ld = LaunchDescription()
-    node_joint_sim2real = Node(
+    node_joint_converter = Node(
         package="ambula_controller",
-        executable="joint_sim2real.py",
+        executable="joint_converter.py",
+        name="joint_converter",
         parameters=[{leg_kinematic_config_path}]
     )
+    node_fk_left = Node(
+        package="ambula_controller",
+        executable="forward_kinematic.py",
+        name="left_leg_forward_kinematics",
+        parameters=[leg_kinematic_config_path],
+    )
+    node_fk_right = Node(
+        package="ambula_controller",
+        executable="forward_kinematic.py",
+        name="right_leg_forward_kinematics",
+        parameters=[leg_kinematic_config_path],
+    )
 
-    ld.add_action(node_joint_sim2real)
+    ld.add_action(node_joint_converter)
+    ld.add_action(node_fk_left)
+    ld.add_action(node_fk_right)
     return ld

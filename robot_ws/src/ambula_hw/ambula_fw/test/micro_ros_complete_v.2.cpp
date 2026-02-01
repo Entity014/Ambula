@@ -96,8 +96,8 @@ std_msgs__msg__Int8 robot_command_msg;
 std_msgs__msg__Int8 led_command_msg;
 std_msgs__msg__Bool payload_command_msg;
 geometry_msgs__msg__Twist twist_msg;
-geometry_msgs__msg__Twist leg_msg;
 geometry_msgs__msg__Twist debug_msg;
+geometry_msgs__msg__Twist leg_msg;
 
 rclc_executor_t executor;
 rclc_support_t support;
@@ -236,8 +236,8 @@ void setup()
             flashLED(3);
         }
     }
-    servoActuator.setServoAngle(LEFT_WAIST_CH, waist_arr[0]);  // left waist
-    servoActuator.setServoAngle(RIGHT_WAIST_CH, waist_arr[1]); // right waist
+    // servoActuator.setServoAngle(LEFT_WAIST_CH, waist_arr[0]);  // left waist
+    // servoActuator.setServoAngle(RIGHT_WAIST_CH, waist_arr[1]); // right waist
 
     // CAN & ODrive
     if (!setupCan())
@@ -258,13 +258,22 @@ void setup()
     odrv_left_wheel.onStatus(onHeartbeat, &D_left_wheel);
     odrv_left_wheel.onFeedback(onFeedback, &D_left_wheel);
 
+    // odrv_right_hip.setPosGain(POS_GAIN_RIGHT_HIP);
+    // odrv_right_hip.setVelGains(VEL_GAIN_RIGHT_HIP, VEL_INTEGRAL_GAIN_RIGHT_HIP);
+    // odrv_left_hip.setPosGain(POS_GAIN_LEFT_HIP);
+    // odrv_left_hip.setVelGains(VEL_GAIN_LEFT_HIP, VEL_INTEGRAL_GAIN_LEFT_HIP);
+    // odrv_right_knee.setPosGain(POS_GAIN_RIGHT_KNEE);
+    // odrv_right_knee.setVelGains(VEL_GAIN_RIGHT_KNEE, VEL_INTEGRAL_GAIN_RIGHT_KNEE);
+    // odrv_left_knee.setPosGain(POS_GAIN_LEFT_KNEE);
+    // odrv_left_knee.setVelGains(VEL_GAIN_LEFT_KNEE, VEL_INTEGRAL_GAIN_LEFT_KNEE);
+
     unsigned long t0 = millis();
     while (!(
-        D_right_hip.got_hb ||
-        D_left_hip.got_hb ||
-        D_left_knee.got_hb ||
-        D_right_knee.got_hb ||
-        D_left_wheel.got_hb ||
+        D_right_hip.got_hb &&
+        D_left_hip.got_hb &&
+        D_left_knee.got_hb &&
+        D_right_knee.got_hb &&
+        D_left_wheel.got_hb &&
         D_right_wheel.got_hb))
     {
         pumpEvents(can_intf);
@@ -294,7 +303,6 @@ void loop()
         EXECUTE_EVERY_N_MS(200, connection_state = (RMW_RET_OK == rmw_uros_ping_agent(100, 1)) ? AGENT_CONNECTED : AGENT_DISCONNECTED;);
         if (connection_state == AGENT_CONNECTED)
         {
-            imuSensor.pollOnce();
             rclc_executor_spin_some(&executor, RCL_MS_TO_NS(5));
         }
         break;
@@ -384,8 +392,8 @@ void moveBase()
     // TODO: รับค่า velocity
     debug_msg.linear.x = req_rpm.motor1 / 60.f;
     debug_msg.linear.y = req_rpm.motor2 / 60.f;
-    debug_msg.linear.z = req_rpm.motor3 / 60.f;
-    debug_msg.angular.x = req_rpm.motor4 / 60.f;
+    debug_msg.linear.z = POS_GAIN_RIGHT_HIP;
+    debug_msg.angular.x = constrain(leg_msg.linear.y, -10.0f, 0.0f);
 
     // TODO: สั่งความเร็วล้อ
     if (robot_state == SLIDE || robot_state == OPERATING)
@@ -401,8 +409,10 @@ void moveBase()
 
     if (robot_state == OPERATING)
     {
-        // odrv_right_hip.setPosition(constrain(leg_msg.linear.x, -30.0f, 5.0f));
-        odrv_right_knee.setPosition(constrain(leg_msg.linear.y, -10.0f, 0.5f));
+        odrv_left_hip.setPosition(leg_msg.linear.x);
+        odrv_left_knee.setPosition(leg_msg.linear.y);
+        odrv_right_hip.setPosition(leg_msg.angular.x);
+        odrv_right_knee.setPosition(leg_msg.angular.y);
     }
 
     // Kinematics::velocities current_vel = kinematics.getVelocities(
@@ -427,11 +437,11 @@ void moveActuator()
 
 void publishData()
 {
+
+    struct timespec time_stamp = getTime();
     odom_msg = odometry.getData();
 
     imu_msg = imuSensor.getData();
-
-    struct timespec time_stamp = getTime();
 
     odom_msg.header.stamp.sec = time_stamp.tv_sec;
     odom_msg.header.stamp.nanosec = time_stamp.tv_nsec;
@@ -472,8 +482,8 @@ void publishData()
         // timeout เล็กๆ 2–5 ms พอ (อย่าใช้ 0 เผื่อเน็ตช้า)
         if (m.drv->getFeedback(fb, 3))
         {
-            joint_state_msg.position.data[m.pos_idx] = fb.Pos_Estimate * REV2RAD;
-            joint_state_msg.velocity.data[m.pos_idx] = fb.Vel_Estimate * REV2RAD;
+            joint_state_msg.position.data[m.pos_idx] = fb.Pos_Estimate;
+            joint_state_msg.velocity.data[m.pos_idx] = fb.Vel_Estimate;
             // joint_state_msg.effort.data[m.pos_idx] = 0.0;
         }
         else
@@ -565,8 +575,8 @@ bool createEntities()
         ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, Bool),
         "payload/command"));
 
-    // create timer for actuating the motors at 50 Hz (1000/20)
-    const unsigned int control_timeout = 20;
+    // create timer for actuating the motors at 200 Hz (1000/5 ms)
+    const unsigned int control_timeout = 5;
     RCCHECK(rclc_timer_init_default(
         &control_timer,
         &support,
@@ -618,8 +628,8 @@ bool destroyEntities()
     rmw_context_t *rmw_context = rcl_context_get_rmw_context(&support.context);
     (void)rmw_uros_set_context_entity_destroy_session_timeout(rmw_context, 0);
 
-    servoActuator.setServoAngle(LEFT_WAIST_CH, 90.0f);  // left waist
-    servoActuator.setServoAngle(RIGHT_WAIST_CH, 90.0f); // right waist
+    // servoActuator.setServoAngle(LEFT_WAIST_CH, 90.0f);  // left waist
+    // servoActuator.setServoAngle(RIGHT_WAIST_CH, 90.0f); // right waist
 
     rosidl_runtime_c__String__fini(&joint_state_msg.header.frame_id);
     rosidl_runtime_c__String__Sequence__fini(&joint_state_msg.name);

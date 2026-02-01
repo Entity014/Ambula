@@ -44,6 +44,9 @@ services:
 
   foxglove:
     extends: ambula_main_compose
+    environment:
+      - ROS_DOMAIN_ID=${ROS_DOMAIN_ID:-15}
+      - RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
     command: bash -c "source /home/.bashrc && ros2 launch foxglove_bridge foxglove_bridge_launch.xml"
 
   # simulation_bringup:
@@ -62,6 +65,8 @@ services:
     environment:
       - QT_X11_NO_MITSHM=1
       - NVIDIA_DRIVER_CAPABILITIES=all
+      - ROS_DOMAIN_ID=${ROS_DOMAIN_ID:-15}
+      - RMW_IMPLEMENTATION=rmw_fastrtps_cpp
     volumes:
       # mount X11 socket
       - /tmp/.X11-unix:/tmp/.X11-unix:rw
@@ -81,6 +86,8 @@ services:
     environment:
       - QT_X11_NO_MITSHM=1
       - NVIDIA_DRIVER_CAPABILITIES=all
+      - ROS_DOMAIN_ID=${ROS_DOMAIN_ID:-15}
+      - RMW_IMPLEMENTATION=rmw_fastrtps_cpp
     volumes:
       # mount X11 socket
       - /tmp/.X11-unix:/tmp/.X11-unix:rw

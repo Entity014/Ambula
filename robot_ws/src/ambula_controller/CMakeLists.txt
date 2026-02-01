@@ -29,7 +29,8 @@ install(PROGRAMS
     src/leg_joint_cmd.py
     src/joint_smoother.py
     src/wheel_cmd.py
-    src/pd_balance.py
+    src/joint_converter.py
+    src/stand_feedforward.py
     DESTINATION lib/${PROJECT_NAME}
 )
 
