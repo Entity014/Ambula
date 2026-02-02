@@ -18,6 +18,11 @@ joint_converter:
       right_knee:  {mode: map_rev, rev_min: -1.4, rev_max: 0.4, deg_max: 70.0,  offset_deg: 70.0, flip: true, flip_limits: true, direction: -1}
       right_wheel: {mode: wheel_rev, offset_deg: 0.0, flip: false, direction: 1}
 
+joint_visualizer:
+  ros__parameters:
+    input_topic: /joint_states/converted
+    output_topic: /joint_states
+
 left_leg_forward_kinematics:
   ros__parameters:
     input_topic: /joint_states/converted

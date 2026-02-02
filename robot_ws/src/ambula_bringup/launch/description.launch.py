@@ -16,7 +16,7 @@ def generate_launch_description():
     urdf_path = PathJoinSubstitution(
         [
             FindPackageShare("ambula_description"),
-            "urdf/ambula_oa",
+            "urdf/ambula_bot/",
             f"{robot_base}.urdf.xacro",
         ]
     )

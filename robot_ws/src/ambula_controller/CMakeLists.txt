@@ -30,6 +30,8 @@ install(PROGRAMS
     src/joint_smoother.py
     src/wheel_cmd.py
     src/joint_converter.py
+    src/joint_state_demo.py
+    src/joint_visualizer.py
     src/stand_feedforward.py
     DESTINATION lib/${PROJECT_NAME}
 )

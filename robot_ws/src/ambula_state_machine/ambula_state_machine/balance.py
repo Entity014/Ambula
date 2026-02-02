@@ -2,6 +2,7 @@ import math
 import py_trees
 from py_trees.common import Status
 
+from nav_msgs.msg import Odometry
 from geometry_msgs.msg import Twist
 from sensor_msgs.msg import Imu
 import transforms3d.euler as euler
@@ -169,125 +170,99 @@ def _lqr_continuous(A, B, Q, R):
 
     return K, P
 
-
 class LQRBalance(py_trees.behaviour.Behaviour):
-    """
-    BT Leaf: LQR balance state (continuous).
-    - Sub IMU, compute pitch via transforms3d.quat2euler
-    - LQR state feedback -> publish cmd_vel.linear.x
-    """
-
     def __init__(self, name: str, node,
                  cmd_vel_topic="/cmd_vel",
                  imu_topic="/imu/data",
+                 odom_topic="/odom",
                  euler_axes="sxyz",
 
-                 # -------- model parameters (linearized) --------
-                 # theta_ddot = a*theta + b*theta_dot + c*vx
-                 a=12.0,        # [1/s^2]  (เริ่มเดาได้ เช่น ไวต่อมุม)
-                 b=-2.0,        # [1/s]    (damping)
-                 c=20.0,        # [1/s^2 per (m/s)]  (vx มีผลต่อการดึงมุม)
+                 # model (theta_ddot = a*theta + b*theta_dot + c*v)
+                 a=12.0,
+                 b=-2.0,
+                 c=20.0,
 
-                 # -------- LQR weights --------
-                 q_pitch=25.0,      # เน้นคุมมุม
-                 q_pitch_rate=2.0,  # เน้นคุมอัตรา
-                 r_vx=1.0,          # ลงโทษการสั่ง vx แรงเกิน
+                 # velocity loop approx: v_dot = (u - v)/tau_v
+                 tau_v=0.20,          # [s]  ลองเริ่ม 0.2
 
-                 # command limits
-                 v_limit=0.35,      # [m/s]
-                 wz_cmd=0.0,        # [rad/s]
+                 # LQR weights
+                 q_pitch=25.0,
+                 q_pitch_rate=2.0,
+                 q_v=3.0,             # << เพิ่มลงโทษความเร็ว
+                 r_vx=1.0,
 
-                 # safety
+                 v_limit=0.35,
+                 wz_cmd=0.0,
                  pitch_soft_deg=35.0,
 
-                 # sign convention (กันกลับด้านหน้างาน)
-                 pitch_sign=+1.0,       # ถ้า pitch กลับด้านให้ใส่ -1
-                 pitch_rate_sign=+1.0,  # ถ้า gyro กลับด้านให้ใส่ -1
-                 vx_sign=+1.0,          # ถ้าสั่งแล้วดันผิดทิศให้ใส่ -1
-                 ):
+                 pitch_sign=+1.0,
+                 pitch_rate_sign=+1.0,
+                 vx_sign=+1.0):
         super().__init__(name)
         self.node = node
 
         self.pub = self.node.create_publisher(Twist, cmd_vel_topic, 10)
         self.node.create_subscription(Imu, imu_topic, self._cb_imu, 10)
+        self.node.create_subscription(Odometry, odom_topic, self._cb_odom, 10)
 
         self.euler_axes = str(euler_axes)
 
-        # model
         self.a = float(a)
         self.b = float(b)
         self.c = float(c)
+        self.tau_v = max(1e-3, float(tau_v))
 
-        # weights
         self.q_pitch = float(q_pitch)
         self.q_pitch_rate = float(q_pitch_rate)
+        self.q_v = float(q_v)
         self.r_vx = float(r_vx)
 
-        # limits & safety
         self.v_limit = abs(float(v_limit))
         self.wz_cmd = float(wz_cmd)
         self.pitch_soft = math.radians(float(pitch_soft_deg))
 
-        # sign
         self.pitch_sign = float(pitch_sign)
         self.pitch_rate_sign = float(pitch_rate_sign)
         self.vx_sign = float(vx_sign)
 
-        # imu state
         self.pitch = 0.0
         self.pitch_rate = 0.0
+        self.v = 0.0                 # << เพิ่ม
         self._have_imu = False
+        self._have_odom = False       # << เพิ่ม
 
-        # LQR gain
-        self.K = None  # shape (1,2)
+        self.K = None  # shape (1,3)
+
+    def _cb_odom(self, msg: Odometry):
+        # ใช้ความเร็วฐานจริง
+        self.v = float(msg.twist.twist.linear.x)
+        self._have_odom = True
 
     def initialise(self):
-        # Build continuous-time A,B
-        # x=[theta, theta_dot], u=vx
-        A = np.array([[0.0, 1.0],
-                      [self.a, self.b]], dtype=float)
-        B = np.array([[0.0],
-                      [self.c]], dtype=float)
+        # 3-state A,B
+        A = np.array([[0.0, 1.0, 0.0],
+                      [self.a, self.b, self.c],
+                      [0.0, 0.0, -1.0/self.tau_v]], dtype=float)
 
-        Q = np.diag([self.q_pitch, self.q_pitch_rate]).astype(float)
+        B = np.array([[0.0],
+                      [0.0],
+                      [1.0/self.tau_v]], dtype=float)
+
+        Q = np.diag([self.q_pitch, self.q_pitch_rate, self.q_v]).astype(float)
         R = np.array([[self.r_vx]], dtype=float)
 
         self.K, _P = _lqr_continuous(A, B, Q, R)
 
         self.node.get_logger().info(
-            f"[{self.name}] START LQR | axes={self.euler_axes} "
-            f"| a={self.a:.3f}, b={self.b:.3f}, c={self.c:.3f} "
-            f"| Q=diag({self.q_pitch:.2f},{self.q_pitch_rate:.2f}), R={self.r_vx:.2f} "
+            f"[{self.name}] START LQR(3-state) | axes={self.euler_axes} "
+            f"| a={self.a:.3f}, b={self.b:.3f}, c={self.c:.3f}, tau_v={self.tau_v:.3f} "
+            f"| Q=diag({self.q_pitch:.2f},{self.q_pitch_rate:.2f},{self.q_v:.2f}), R={self.r_vx:.2f} "
             f"| K={self.K.flatten()}"
         )
         self._publish(0.0, self.wz_cmd)
 
-    def terminate(self, new_status):
-        self.node.get_logger().info(f"[{self.name}] TERMINATE → {new_status}")
-        self._publish(0.0, 0.0)
-
-    def _publish(self, vx: float, wz: float):
-        tw = Twist()
-        tw.linear.x = float(vx)
-        tw.angular.z = float(wz)
-        self.pub.publish(tw)
-
-    def _cb_imu(self, msg: Imu):
-        q = msg.orientation
-        qw, qx, qy, qz = q.w, q.x, q.y, q.z  # transforms3d expects (w,x,y,z)
-
-        ax, ay, az = euler.quat2euler((qw, qx, qy, qz), axes=self.euler_axes)
-
-        # 'sxyz' โดยทั่วไป ay ~ pitch
-        self.pitch = self.pitch_sign * float(ay)
-
-        # pitch rate มักสอดคล้องกับ gyro y
-        self.pitch_rate = self.pitch_rate_sign * float(msg.angular_velocity.y)
-
-        self._have_imu = True
-
     def update(self):
-        if not self._have_imu or self.K is None:
+        if (not self._have_imu) or (not self._have_odom) or (self.K is None):
             self._publish(0.0, self.wz_cmd)
             return Status.RUNNING
 
@@ -298,14 +273,13 @@ class LQRBalance(py_trees.behaviour.Behaviour):
             self._publish(0.0, 0.0)
             return Status.RUNNING
 
-        # state
         x = np.array([[self.pitch],
-                      [self.pitch_rate]], dtype=float)
+                      [self.pitch_rate],
+                      [self.v]], dtype=float)
 
-        # u = -Kx
-        vx = -float((self.K @ x).item())
-        vx = self.vx_sign * vx
-        vx = clamp(vx, -self.v_limit, +self.v_limit)
+        vx_cmd = -float((self.K @ x).item())
+        vx_cmd = self.vx_sign * vx_cmd
+        vx_cmd = clamp(vx_cmd, -self.v_limit, +self.v_limit)
 
-        self._publish(vx, self.wz_cmd)
+        self._publish(vx_cmd, self.wz_cmd)
         return Status.RUNNING

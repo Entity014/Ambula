@@ -1,0 +1,33 @@
+diff_drive_kinematics:
+  ros__parameters:
+    joint_state_topic: /joint_states/converted
+    odom_topic: /odom/data_raw
+
+    left_wheel_joint: left_wheel
+    right_wheel_joint: right_wheel
+
+    wheel_radius: 0.075
+    wheel_separation: 0.40
+
+    odom_frame: odom
+    base_frame: base_link
+
+    use_position_if_no_velocity: true
+
+    pose_cov_xy: 0.02
+    pose_cov_yaw: 0.05
+    twist_cov_v: 0.05
+    twist_cov_yawrate: 0.05
+
+height_estimator:
+  ros__parameters:
+    imu_topic: /imu/data_raw
+    left_wheel_center_topic: /ambula/left_foot_point
+    right_wheel_center_topic: /ambula/right_foot_point
+    height_topic: /ambula/height
+
+    wheel_radius: 0.075
+    use_both_wheels: false
+
+    enable_smoothing: false
+    ema_alpha: 0.2

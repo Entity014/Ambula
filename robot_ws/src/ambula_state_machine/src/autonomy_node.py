@@ -20,6 +20,7 @@ class AutonomyBehavior(Node):
         self.declare_parameter("tick_period", 0.1)
         self.declare_parameter("cmd_vel_topic", "/cmd_vel")
         self.declare_parameter("imu_topic", "/imu/data")
+        self.declare_parameter("odom_topic", "/odom")
         self.declare_parameter("euler_axes", "sxyz")
         self.declare_parameter("balance_mode", "pd")
 
@@ -33,10 +34,34 @@ class AutonomyBehavior(Node):
         self.declare_parameter("feedforward.pitch_trigger_deg", 12.0)
         self.declare_parameter("feedforward.pitch_trigger_mode", "either")  # either|positive|negative
         self.declare_parameter("feedforward.pitch_hold_s", 0.10)
+        self.declare_parameter("feedforward.wait_imu_on_start", True)
+        self.declare_parameter("feedforward.imu_wait_timeout_s", 0.50)
+        self.declare_parameter("feedforward.imu_stale_timeout_s", 0.25)
+        self.declare_parameter("feedforward.dt_max_scale", 3.0)
+
+        self.declare_parameter("pdbalance.kp_pitch", 5.0)
+        self.declare_parameter("pdbalance.kd_pitch", 0.1)
+        self.declare_parameter("pdbalance.v_limit", 0.5)
+        self.declare_parameter("pdbalance.wz_cmd", 0.0)
+        self.declare_parameter("pdbalance.pitch_soft_deg", 5.0)
+
+        self.declare_parameter("lqrbalance.a", 12.0)
+        self.declare_parameter("lqrbalance.b", -2.0)
+        self.declare_parameter("lqrbalance.c", 20.0)
+        self.declare_parameter("lqrbalance.q_pitch", 25.0)
+        self.declare_parameter("lqrbalance.q_pitch_rate", 2.0)
+        self.declare_parameter("lqrbalance.r_vx", 1.0)
+        self.declare_parameter("lqrbalance.v_limit", 0.5)
+        self.declare_parameter("lqrbalance.wz_cmd", 0.0)
+        self.declare_parameter("lqrbalance.pitch_soft_deg", 5.0)
+        self.declare_parameter("lqrbalance.pitch_sign", 1.0)
+        self.declare_parameter("lqrbalance.pitch_rate_sign", 1.0)
+        self.declare_parameter("lqrbalance.vx_sign", 1.0)
 
         self.tick_period = float(self.get_parameter("tick_period").value)
         self.cmd_vel_topic = str(self.get_parameter("cmd_vel_topic").value)
         self.imu_topic = str(self.get_parameter("imu_topic").value)
+        self.odom_topic = str(self.get_parameter("odom_topic").value)
         self.euler_axes = str(self.get_parameter("euler_axes").value)
         self.balance_mode = str(self.get_parameter("balance_mode").value)
 
@@ -51,6 +76,10 @@ class AutonomyBehavior(Node):
             "pitch_trigger_deg": float(self.get_parameter("feedforward.pitch_trigger_deg").value),
             "pitch_trigger_mode": str(self.get_parameter("feedforward.pitch_trigger_mode").value),
             "pitch_hold_s": float(self.get_parameter("feedforward.pitch_hold_s").value),
+            "wait_imu_on_start": bool(self.get_parameter("feedforward.wait_imu_on_start").value),
+            "imu_wait_timeout_s": float(self.get_parameter("feedforward.imu_wait_timeout_s").value),
+            "imu_stale_timeout_s": float(self.get_parameter("feedforward.imu_stale_timeout_s").value),
+            "dt_max_scale": float(self.get_parameter("feedforward.dt_max_scale").value),
         }
 
         self.tree = self.create_behavior_tree()
@@ -75,6 +104,10 @@ class AutonomyBehavior(Node):
                     pitch_trigger_deg=self.ff["pitch_trigger_deg"],
                     pitch_trigger_mode=self.ff["pitch_trigger_mode"],
                     pitch_hold_s=self.ff["pitch_hold_s"],
+                    wait_imu_on_start=self.ff["wait_imu_on_start"],
+                    imu_wait_timeout_s=self.ff["imu_wait_timeout_s"],
+                    imu_stale_timeout_s=self.ff["imu_stale_timeout_s"],
+                    dt_max_scale=self.ff["dt_max_scale"],
                 ),
                 DriveTwistTime(
                     name="Forward",
@@ -90,12 +123,6 @@ class AutonomyBehavior(Node):
 
 
         if self.balance_mode == "pd":
-            self.declare_parameter("pdbalance.kp_pitch", 5.0)
-            self.declare_parameter("pdbalance.kd_pitch", 0.1)
-            self.declare_parameter("pdbalance.v_limit", 0.5)
-            self.declare_parameter("pdbalance.wz_cmd", 0.0)
-            self.declare_parameter("pdbalance.pitch_soft_deg", 5.0)
-
             balance_leaf = PDBalance(
                 name="Balance(PD)",
                 node=self,
@@ -109,30 +136,19 @@ class AutonomyBehavior(Node):
                 pitch_soft_deg=float(self.get_parameter("pdbalance.pitch_soft_deg").value),
             )
         else:
-            self.declare_parameter("lqrbalance.a", 12.0)
-            self.declare_parameter("lqrbalance.b", -2.0)
-            self.declare_parameter("lqrbalance.c", 20.0)
-            self.declare_parameter("lqrbalance.q_pitch", 25.0)
-            self.declare_parameter("lqrbalance.q_pitch_rate", 2.0)
-            self.declare_parameter("lqrbalance.r_vx", 1.0)
-            self.declare_parameter("lqrbalance.v_limit", 0.5)
-            self.declare_parameter("lqrbalance.wz_cmd", 0.0)
-            self.declare_parameter("lqrbalance.pitch_soft_deg", 5.0)
-            self.declare_parameter("lqrbalance.pitch_sign", 1.0)
-            self.declare_parameter("lqrbalance.pitch_rate_sign", 1.0)
-            self.declare_parameter("lqrbalance.vx_sign", 1.0)
-
             balance_leaf = LQRBalance(
                 name="Balance(LQR)",
                 node=self,
                 cmd_vel_topic=self.cmd_vel_topic,
                 imu_topic=self.imu_topic,
+                odom_topic=self.odom_topic,
                 euler_axes=self.euler_axes,
                 a=float(self.get_parameter("lqrbalance.a").value),
                 b=float(self.get_parameter("lqrbalance.b").value),
                 c=float(self.get_parameter("lqrbalance.c").value),
                 q_pitch=float(self.get_parameter("lqrbalance.q_pitch").value),
                 q_pitch_rate=float(self.get_parameter("lqrbalance.q_pitch_rate").value),
+                q_v=float(self.get_parameter("lqrbalance.q_v").value),
                 r_vx=float(self.get_parameter("lqrbalance.r_vx").value),
                 v_limit=float(self.get_parameter("lqrbalance.v_limit").value),
                 wz_cmd=float(self.get_parameter("lqrbalance.wz_cmd").value),

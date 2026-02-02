@@ -6,10 +6,11 @@ autonomy_node:
     tick_period: 0.005
     cmd_vel_topic: "/cmd_vel"
     imu_topic: "/imu/data_raw"
+    odom_topic: "/odom"
     euler_axes: "sxyz"
 
     # choose: "pd" or "lqr"
-    balance_mode: "pd"
+    balance_mode: "lqr"
 
     # -----------------------------
     # feedforward (stand / rocking)
@@ -18,29 +19,34 @@ autonomy_node:
       control_hz: 100.0
       v_peak: 3.7
       forward_time: 0.10
-      backward_time: 0.30
+      backward_time: 0.40
       ramp_time: 0.05
       yaw_rate: 0.0
 
       # pitch trigger
       use_pitch_trigger: true
-      pitch_trigger_deg: 12.0
+      pitch_trigger_deg: 24.0
       pitch_trigger_mode: "either"   # either | positive | negative
-      pitch_hold_s: 0.10
+      pitch_hold_s: 0.05
+
+      wait_imu_on_start: true        # เริ่มด้วย WAIT_IMU
+      imu_wait_timeout_s: 0.5       # IMU ไม่มาเกินนี้ -> เริ่ม profile ได้ แต่ trigger ยังไม่ทำงานจน IMU fresh
+      imu_stale_timeout_s: 0.25      # IMU เก่ากว่า 0.25s -> disable trigger ชั่วคราว
+      dt_max_scale: 3.0              # clamp dt ถ้า tick หลุด
 
     # -----------------------------
     # balance: PD gains (used when balance_mode: "pd")
     # -----------------------------
     pdbalance:
-      kp_pitch: 5.0          # [m/s per rad]
-      kd_pitch: 0.10         # [m/s per (rad/s)]
-      v_limit: 0.50          # [m/s]
+      kp_pitch: 4.8          # [m/s per rad]
+      kd_pitch: 1.5         # [m/s per (rad/s)]
+      v_limit: 2.0          # [m/s]
       wz_cmd: 0.0            # keep yaw still
       pitch_soft_deg: 35.0   # safety soft stop (deg)
 
     # -----------------------------
     # balance: LQR params (used when balance_mode: "lqr")
-    # -----------------------------
+    # ----------------------------- 
     lqrbalance:
       a: 12.0
       b: -2.0
@@ -48,6 +54,7 @@ autonomy_node:
 
       q_pitch: 25.0
       q_pitch_rate: 2.0
+      q_v: 3.0
       r_vx: 1.0
 
       v_limit: 0.50

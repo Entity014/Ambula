@@ -21,6 +21,12 @@ def generate_launch_description():
         name="joint_converter",
         parameters=[{leg_kinematic_config_path}]
     )
+    node_joint_visualizer = Node(
+        package="ambula_controller",
+        executable="joint_visualizer.py",
+        name="joint_visualizer",
+        parameters=[{leg_kinematic_config_path}]
+    )
     node_fk_left = Node(
         package="ambula_controller",
         executable="forward_kinematic.py",
@@ -35,6 +41,7 @@ def generate_launch_description():
     )
 
     ld.add_action(node_joint_converter)
+    ld.add_action(node_joint_visualizer)
     ld.add_action(node_fk_left)
     ld.add_action(node_fk_right)
     return ld
