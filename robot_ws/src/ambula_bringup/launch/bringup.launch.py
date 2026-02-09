@@ -43,11 +43,16 @@ def generate_launch_description():
             [PathJoinSubstitution([state_machine_pkg_path, "launch", "state_machine.launch.py"])]
         )
     )
-    
+
+    balance_control_launch = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource(
+            [PathJoinSubstitution([controller_pkg_path, "launch", "balance_control.launch.py"])]
+        )
+    )
 
     ld = LaunchDescription()
-    ld.add_action(description_launch)
-    ld.add_action(leg_kinematic_launch)
+    # ld.add_action(description_launch)
+    # ld.add_action(leg_kinematic_launch)
     ld.add_action(state_estimation_launch)
-    # ld.add_action(state_machine_launch)
+    ld.add_action(balance_control_launch)
     return ld

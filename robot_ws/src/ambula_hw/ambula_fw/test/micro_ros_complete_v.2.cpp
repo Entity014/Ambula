@@ -452,11 +452,11 @@ void publishData()
     joint_state_msg.header.stamp.sec = time_stamp.tv_sec;
     joint_state_msg.header.stamp.nanosec = time_stamp.tv_nsec;
 
-    joint_state_msg.position.data[J_LEFT_WAIST] = waist_arr[0] * DEG_TO_RAD; // rad
+    joint_state_msg.position.data[J_LEFT_WAIST] = 0.0; // rad
     joint_state_msg.velocity.data[J_LEFT_WAIST] = 0.0;
     joint_state_msg.effort.data[J_LEFT_WAIST] = 0.0;
 
-    joint_state_msg.position.data[J_RIGHT_WAIST] = waist_arr[1] * DEG_TO_RAD; // rad
+    joint_state_msg.position.data[J_RIGHT_WAIST] = 0.0; // rad
     joint_state_msg.velocity.data[J_RIGHT_WAIST] = 0.0;
     joint_state_msg.effort.data[J_RIGHT_WAIST] = 0.0;
 

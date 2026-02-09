@@ -1,0 +1,55 @@
+balance_node:
+  ros__parameters:
+    # -------------------------
+    # ONNX
+    # -------------------------
+    onnx_path: "/home/robot_ws/src/ambula_controller/src/policy.onnx"
+
+    # Inference / control rate
+    rate_hz: 100.0
+
+    # -------------------------
+    # Action scaling (IMPORTANT)
+    # -------------------------
+    # ต้องตรงกับ JointVelocityActionCfg(scale=20.0) ใน Isaac Lab :contentReference[oaicite:1]{index=1}
+    action_scale_rad_s: 20.0
+
+    # clip action แบบเดียวกับตอน play.py (PPO deployment)
+    clip_norm_action: true
+
+    # safety clamp หลัง scale (rad/s)
+    # (ใน env: wheel velocity_limit ~30 rad/s) :contentReference[oaicite:2]{index=2}
+    clip_wheel_rad_s: 30.0
+
+    # -------------------------
+    # Topics
+    # -------------------------
+    # output: publish wheel commands (packed)
+    cmd_vel_topic: "/cmd_vel"
+
+    # inputs
+    imu_topic: "/imu/data_raw"
+    joint_states_topic: "/wheel_joint_states"
+
+    # เพิ่มสำหรับ none_stack_policy ที่ actor ต้องใช้ (velocity_commands + base_lin_vel + base_pos_z)
+    rl_cmd_topic: "/rl_cmd"     # Twist: vx=linear.x, vy=linear.y, wz=angular.z, z_hold=linear.z
+    odom_topic: "/odom/data_raw"         # Odometry: base_lin_vel=twist.linear.x, base_pos_z=pose.position.z
+
+    # -------------------------
+    # Joint names (ต้องตรง JointState.name)
+    # -------------------------
+    left_wheel_joint: "left_wheel"
+    right_wheel_joint: "right_wheel"
+
+    # -------------------------
+    # Defaults (ใช้เมื่อยังไม่มี odom/command เข้ามา)
+    # -------------------------
+    default_base_lin_vel: 0.0
+    default_base_pos_z: 0.0
+    default_cmd_z_hold: 0.0
+
+    # -------------------------
+    # Threading (onnxruntime)
+    # -------------------------
+    intra_op_threads: 1
+    inter_op_threads: 1

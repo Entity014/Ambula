@@ -69,7 +69,7 @@ WORKDIR /home
 
 # Python dependencies
 RUN pip3 install --no-cache-dir --break-system-packages --ignore-installed sympy \
-    transforms3d pyproj matplotlib evdev pandas "numpy<2"
+    transforms3d pyproj matplotlib evdev pandas "numpy<2" scipy onnxruntime
 
 # Set CycloneDDS
 ENV RMW_IMPLEMENTATION=rmw_cyclonedds_cpp

@@ -10,8 +10,8 @@
 #define MOTOR_MAX_RPM 800.0f
 #define MAX_RPM_RATIO 0.8f
 #define RPM_RATIO 1.0f
-#define WHEEL_DIAMETER 0.15f    // meter
-#define LR_WHEELS_DISTANCE 0.4f // meter
+#define WHEEL_DIAMETER 0.14f     // meter
+#define LR_WHEELS_DISTANCE 0.27f // meter
 
 #define SERVOMIN 150  // This is the 'minimum' pulse length count (out of 4096)
 #define SERVOMAX 600  // This is the 'maximum' pulse length count (out of 4096)

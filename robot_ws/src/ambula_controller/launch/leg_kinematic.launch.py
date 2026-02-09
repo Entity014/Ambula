@@ -41,7 +41,7 @@ def generate_launch_description():
     )
 
     ld.add_action(node_joint_converter)
-    ld.add_action(node_joint_visualizer)
+    # ld.add_action(node_joint_visualizer)
     ld.add_action(node_fk_left)
     ld.add_action(node_fk_right)
     return ld

@@ -18,12 +18,13 @@ def generate_launch_description():
 
     state_estimator_pkg_path = get_package_share_directory("ambula_state_estimator")
 
-    drive_kinematic_launch = IncludeLaunchDescription(
+    localization_launch = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
-            [PathJoinSubstitution([state_estimator_pkg_path, "launch", "drive_kinematics.launch.py"])]
+            [PathJoinSubstitution([state_estimator_pkg_path, "launch", "localization.launch.py"])]
         )
     )
 
+
     ld = LaunchDescription()
-    ld.add_action(drive_kinematic_launch)
+    ld.add_action(localization_launch)
     return ld

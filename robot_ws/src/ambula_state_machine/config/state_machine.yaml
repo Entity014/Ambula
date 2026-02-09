@@ -6,11 +6,11 @@ autonomy_node:
     tick_period: 0.005
     cmd_vel_topic: "/cmd_vel"
     imu_topic: "/imu/data_raw"
-    odom_topic: "/odom"
+    odom_topic: "/odom/data_raw"
     euler_axes: "sxyz"
 
     # choose: "pd" or "lqr"
-    balance_mode: "lqr"
+    balance_mode: "pid"
 
     # -----------------------------
     # feedforward (stand / rocking)
@@ -37,31 +37,46 @@ autonomy_node:
     # -----------------------------
     # balance: PD gains (used when balance_mode: "pd")
     # -----------------------------
-    pdbalance:
-      kp_pitch: 4.8          # [m/s per rad]
-      kd_pitch: 1.5         # [m/s per (rad/s)]
-      v_limit: 2.0          # [m/s]
+    pidbalance:
+      kp_pitch: 1.0          # [m/s per rad]
+      ki_pitch: 0.1          # [m/s per rad]
+      kd_pitch: 0.01         # [m/s per (rad/s)]
+      v_limit: 1.5          # [m/s]
       wz_cmd: 0.0            # keep yaw still
       pitch_soft_deg: 35.0   # safety soft stop (deg)
+      pitch_trim_deg: 2.0
+      pitch_sign: 1.0
+      pitch_rate_sign: 1.0
+      v_min: 0.5
+      stop_band_deg: 1.0
+      stop_rate_deg: 6.0
+      min_vel_only_when_need: true
 
     # -----------------------------
     # balance: LQR params (used when balance_mode: "lqr")
     # ----------------------------- 
     lqrbalance:
-      a: 12.0
-      b: -2.0
-      c: 20.0
+      cart_mass: 3.2          # M [kg]
+      pendulum_mass: 12.0     # m [kg]
+      length_com: 0.2         # l [m]
+      inertia: 0.2            # I [kg m^2] (เริ่มที่ 0.2 ก่อน)
+      friction: 1.0           # b [N s/m] ใส่คร่าว ๆ ได้
+      gravity: 9.81           # g
 
-      q_pitch: 25.0
-      q_pitch_rate: 2.0
-      q_v: 3.0
-      r_vx: 1.0
+      # LQR weights (Q,R) - เน้นทรงตัว
+      q_x: 0.05               # ถ้า odom x drift เยอะอยู่แล้ว ค่านี้ไม่ต้องสูง
+      q_xdot: 1.0
+      q_theta: 10.0          # เน้น pitch
+      q_theta_dot: 2.0       # เน้นลดการส่ายเร็ว
+      r_force: 1.2            # เพิ่ม R ให้ไม่กระชาก
 
-      v_limit: 0.50
+      # Force -> cmd_vel mapping (สำคัญสุดตอนนี้)
+      kF: 10.0                # สูงขึ้น = นิ่มขึ้น/สั่นน้อยลง (เริ่ม 55)
+      v_limit: 2.0            # ให้สอดคล้องกับ v_limit ใน pdbalance ที่คุณตั้งไว้
       wz_cmd: 0.0
-      pitch_soft_deg: 35.0
 
-      # sign convention (แก้ทิศทาง IMU/เฟรม)
+      pitch_soft_deg: 35.0    # ขอแนะนำให้เท่ากับ PD (อย่าใช้ 5 deg)
       pitch_sign: 1.0
       pitch_rate_sign: 1.0
       vx_sign: 1.0
+

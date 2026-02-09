@@ -10,7 +10,7 @@ import py_trees_ros
 
 from ambula_state_machine.feedforward import FeedForward
 from ambula_state_machine.move import DriveTwistTime
-from ambula_state_machine.balance import PDBalance, LQRBalance
+from ambula_state_machine.balance import PIDBalance, LQRBalance
 
 
 class AutonomyBehavior(Node):
@@ -39,24 +39,39 @@ class AutonomyBehavior(Node):
         self.declare_parameter("feedforward.imu_stale_timeout_s", 0.25)
         self.declare_parameter("feedforward.dt_max_scale", 3.0)
 
-        self.declare_parameter("pdbalance.kp_pitch", 5.0)
-        self.declare_parameter("pdbalance.kd_pitch", 0.1)
-        self.declare_parameter("pdbalance.v_limit", 0.5)
-        self.declare_parameter("pdbalance.wz_cmd", 0.0)
-        self.declare_parameter("pdbalance.pitch_soft_deg", 5.0)
+        self.declare_parameter("pidbalance.kp_pitch", 5.0)
+        self.declare_parameter("pidbalance.ki_pitch", 0.4)
+        self.declare_parameter("pidbalance.kd_pitch", 0.1)
+        self.declare_parameter("pidbalance.v_limit", 0.5)
+        self.declare_parameter("pidbalance.wz_cmd", 0.0)
+        self.declare_parameter("pidbalance.pitch_trim_deg", 2.0)
+        self.declare_parameter("pidbalance.pitch_soft_deg", 5.0)
+        self.declare_parameter("pidbalance.pitch_sign", 1.0)
+        self.declare_parameter("pidbalance.pitch_rate_sign", 1.0)
+        self.declare_parameter("pidbalance.v_min", 0.08)
+        self.declare_parameter("pidbalance.stop_band_deg", 1.0)
+        self.declare_parameter("pidbalance.stop_rate_deg", 6.0)
+        self.declare_parameter("pidbalance.min_vel_only_when_need", True)
 
-        self.declare_parameter("lqrbalance.a", 12.0)
-        self.declare_parameter("lqrbalance.b", -2.0)
-        self.declare_parameter("lqrbalance.c", 20.0)
-        self.declare_parameter("lqrbalance.q_pitch", 25.0)
-        self.declare_parameter("lqrbalance.q_pitch_rate", 2.0)
-        self.declare_parameter("lqrbalance.r_vx", 1.0)
+        self.declare_parameter("lqrbalance.cart_mass", 8.0)
+        self.declare_parameter("lqrbalance.pendulum_mass", 12.0)
+        self.declare_parameter("lqrbalance.length_com", 0.35)
+        self.declare_parameter("lqrbalance.inertia", 0.9)
+        self.declare_parameter("lqrbalance.friction", 1.0)
+        self.declare_parameter("lqrbalance.gravity", 9.81)
+        self.declare_parameter("lqrbalance.q_x", 0.2)
+        self.declare_parameter("lqrbalance.q_xdot", 0.8)
+        self.declare_parameter("lqrbalance.q_theta", 60.0)
+        self.declare_parameter("lqrbalance.q_theta_dot", 6.0)
+        self.declare_parameter("lqrbalance.r_force", 0.8)
+        self.declare_parameter("lqrbalance.kF", 35.0)
         self.declare_parameter("lqrbalance.v_limit", 0.5)
         self.declare_parameter("lqrbalance.wz_cmd", 0.0)
         self.declare_parameter("lqrbalance.pitch_soft_deg", 5.0)
         self.declare_parameter("lqrbalance.pitch_sign", 1.0)
         self.declare_parameter("lqrbalance.pitch_rate_sign", 1.0)
         self.declare_parameter("lqrbalance.vx_sign", 1.0)
+
 
         self.tick_period = float(self.get_parameter("tick_period").value)
         self.cmd_vel_topic = str(self.get_parameter("cmd_vel_topic").value)
@@ -122,18 +137,25 @@ class AutonomyBehavior(Node):
         )
 
 
-        if self.balance_mode == "pd":
-            balance_leaf = PDBalance(
-                name="Balance(PD)",
+        if self.balance_mode == "pid":
+            balance_leaf = PIDBalance(
+                name="Balance(PID)",
                 node=self,
                 cmd_vel_topic=self.cmd_vel_topic,
                 imu_topic=self.imu_topic,
-                euler_axes=self.euler_axes,
-                kp_pitch=float(self.get_parameter("pdbalance.kp_pitch").value),
-                kd_pitch=float(self.get_parameter("pdbalance.kd_pitch").value),
-                v_limit=float(self.get_parameter("pdbalance.v_limit").value),
-                wz_cmd=float(self.get_parameter("pdbalance.wz_cmd").value),
-                pitch_soft_deg=float(self.get_parameter("pdbalance.pitch_soft_deg").value),
+                kp_pitch=float(self.get_parameter("pidbalance.kp_pitch").value),
+                ki_pitch=float(self.get_parameter("pidbalance.ki_pitch").value),
+                kd_pitch=float(self.get_parameter("pidbalance.kd_pitch").value),
+                v_limit=float(self.get_parameter("pidbalance.v_limit").value),
+                wz_cmd=float(self.get_parameter("pidbalance.wz_cmd").value),
+                pitch_soft_deg=float(self.get_parameter("pidbalance.pitch_soft_deg").value),
+                pitch_trim_deg=float(self.get_parameter("pidbalance.pitch_trim_deg").value),
+                pitch_sign=float(self.get_parameter("pidbalance.pitch_sign").value),
+                pitch_rate_sign=float(self.get_parameter("pidbalance.pitch_rate_sign").value),
+                v_min=float(self.get_parameter("pidbalance.v_min").value),
+                stop_band_deg=float(self.get_parameter("pidbalance.stop_band_deg").value),
+                stop_rate_deg_s=float(self.get_parameter("pidbalance.stop_rate_deg").value),
+                min_vel_only_when_need=bool(self.get_parameter("pidbalance.min_vel_only_when_need").value)
             )
         else:
             balance_leaf = LQRBalance(
@@ -143,26 +165,30 @@ class AutonomyBehavior(Node):
                 imu_topic=self.imu_topic,
                 odom_topic=self.odom_topic,
                 euler_axes=self.euler_axes,
-                a=float(self.get_parameter("lqrbalance.a").value),
-                b=float(self.get_parameter("lqrbalance.b").value),
-                c=float(self.get_parameter("lqrbalance.c").value),
-                q_pitch=float(self.get_parameter("lqrbalance.q_pitch").value),
-                q_pitch_rate=float(self.get_parameter("lqrbalance.q_pitch_rate").value),
-                q_v=float(self.get_parameter("lqrbalance.q_v").value),
-                r_vx=float(self.get_parameter("lqrbalance.r_vx").value),
+                M=float(self.get_parameter("lqrbalance.cart_mass").value),
+                m=float(self.get_parameter("lqrbalance.pendulum_mass").value),
+                l=float(self.get_parameter("lqrbalance.length_com").value),
+                I=float(self.get_parameter("lqrbalance.inertia").value),
+                b=float(self.get_parameter("lqrbalance.friction").value),
+                g=float(self.get_parameter("lqrbalance.gravity").value),
+                q_x=float(self.get_parameter("lqrbalance.q_x").value),
+                q_xdot=float(self.get_parameter("lqrbalance.q_xdot").value),
+                q_theta=float(self.get_parameter("lqrbalance.q_theta").value),
+                q_theta_dot=float(self.get_parameter("lqrbalance.q_theta_dot").value),
+                r_force=float(self.get_parameter("lqrbalance.r_force").value),
+                kF=float(self.get_parameter("lqrbalance.kF").value),
                 v_limit=float(self.get_parameter("lqrbalance.v_limit").value),
                 wz_cmd=float(self.get_parameter("lqrbalance.wz_cmd").value),
                 pitch_soft_deg=float(self.get_parameter("lqrbalance.pitch_soft_deg").value),
                 pitch_sign=float(self.get_parameter("lqrbalance.pitch_sign").value),
                 pitch_rate_sign=float(self.get_parameter("lqrbalance.pitch_rate_sign").value),
-                vx_sign=float(self.get_parameter("lqrbalance.vx_sign").value),
             )
 
         run = py_trees.composites.Parallel(name="loop balance", policy=py_trees.common.ParallelPolicy.SuccessOnAll())
         run.add_children([balance_leaf])
 
         seq = py_trees.composites.Sequence(name="stand feedforward", memory=True)
-        seq.add_children([startup])
+        seq.add_children([run])
 
         root = py_trees.decorators.OneShot(
             name="root",

@@ -2,6 +2,8 @@ diff_drive_kinematics:
   ros__parameters:
     joint_state_topic: /joint_states/converted
     odom_topic: /odom/data_raw
+    wheel_state_topic: /wheel_joint_states
+    publish_wheel_joint_state: true
 
     left_wheel_joint: left_wheel
     right_wheel_joint: right_wheel
@@ -12,12 +14,33 @@ diff_drive_kinematics:
     odom_frame: odom
     base_frame: base_link
 
-    use_position_if_no_velocity: true
+    # -----------------------------
+    # เลือกแหล่งคำนวณ omega
+    # -----------------------------
+    # True  = ใช้ position เป็นหลัก (แนะนำเมื่อ velocity ไม่นิ่ง)
+    # False = ใช้ velocity ก่อน ถ้าไม่มี/อ่านไม่ได้ค่อย fallback ไป position
+    prefer_position: true
 
+    # -----------------------------
+    # กรอง omega ที่ได้จาก position-diff
+    # -----------------------------
+    # 0..1 : มาก = ตามเร็ว แต่สั่น, น้อย = เนียนแต่หน่วง
+    omega_lpf_alpha: 0.35
+
+    # -----------------------------
+    # Robustness ต่อ dt ที่กระโดด
+    # -----------------------------
+    # ถ้า dt > ค่านี้ จะ reset integration กัน odom กระโดด
+    dt_max_s: 1.0
+
+    # -----------------------------
+    # Covariances
+    # -----------------------------
     pose_cov_xy: 0.02
     pose_cov_yaw: 0.05
     twist_cov_v: 0.05
     twist_cov_yawrate: 0.05
+
 
 height_estimator:
   ros__parameters:
