@@ -1,40 +1,21 @@
-joint_converter:
+height_adjust:
   ros__parameters:
-    input_topic: /joint_states/hardware
-    output_topic: /joint_states/converted
+    topic_height_cmd: /ambula/height
+    topic_left_foot_target: /ambula/left_foot_target
+    topic_right_foot_target: /ambula/right_foot_target
+    
+    default_height: 0.15
+    min_height: 0.15
+    max_height: 0.30
 
-    # เลือกหน่วย output ของ JointState: "rad" หรือ "deg"
-    output_unit: rad
+    foot_offset_x: 0.02
+    foot_offset_y: 0.2
 
-    # ใส่ config เป็น string แล้วให้ node parse เอง
-    joint_config_yaml: |
-      left_waist:  {mode: waist_rad, offset_deg: 0.0, flip: false, direction: 1}
-      left_hip:    {mode: map_rev, rev_min: -1.8, rev_max: 7.8, deg_max: 180.0, offset_deg: 180.0, flip: true, flip_limits: true, direction: -1}
-      left_knee:   {mode: map_rev, rev_min: 0.0, rev_max: 1.8, deg_max: 70.0,  offset_deg: 70.0, flip: false, flip_limits: true, direction: -1}
-      left_wheel:  {mode: wheel_rev, offset_deg: 0.0, flip: true, direction: 1}
-
-      right_waist: {mode: waist_rad, offset_deg: 0.0, flip: false, direction: 1}
-      right_hip:   {mode: map_rev, rev_min: -7.2, rev_max: 2.2, deg_max: 180.0, offset_deg: 180.0, flip: false, flip_limits: true, direction: -1}
-      right_knee:  {mode: map_rev, rev_min: -1.4, rev_max: 0.4, deg_max: 70.0,  offset_deg: 70.0, flip: true, flip_limits: true, direction: -1}
-      right_wheel: {mode: wheel_rev, offset_deg: 0.0, flip: false, direction: 1}
-
-joint_visualizer:
+left_leg_inverse_kinematic:
   ros__parameters:
-    input_topic: /joint_states/converted
-    output_topic: /joint_states
-
-left_leg_forward_kinematics:
-  ros__parameters:
-    input_topic: /joint_states/converted
-    output_topic: /ambula/left_foot_point
-
-    base_frame: base_link
-    rr_foot_frame: left_foot
-    publish_tf: true
-
-    waist_name: left_waist
-    hip_name: left_hip
-    knee_name: left_knee
+    target_topic: /ambula/left_foot_target
+    cmd_topic: /ambula/left_leg_joint_cmd
+    print_deg: true
 
     waist_offset_deg: 0.0
     hip_offset_deg: 0.0
@@ -48,20 +29,14 @@ left_leg_forward_kinematics:
     L2: 0.24
     L3: 0.0
 
-    align_y: 1.5707963267948966
+    elbow: "down"
+    
 
-right_leg_forward_kinematics:
+right_leg_inverse_kinematic:
   ros__parameters:
-    input_topic: /joint_states/converted
-    output_topic: /ambula/right_foot_point
-
-    base_frame: base_link
-    rr_foot_frame: right_foot
-    publish_tf: true
-
-    waist_name: right_waist
-    hip_name: right_hip
-    knee_name: right_knee
+    target_topic: /ambula/right_foot_target
+    cmd_topic: /ambula/right_leg_joint_cmd
+    print_deg: true
 
     waist_offset_deg: 0.0
     hip_offset_deg: 0.0
@@ -75,4 +50,85 @@ right_leg_forward_kinematics:
     L2: 0.24
     L3: 0.0
 
-    align_y: 1.5707963267948966
+    elbow: "down"
+
+left_leg_joint_smoother:
+  ros__parameters:
+    state_topic: /joint_states/hardware
+    target_topic: /ambula/left_leg_joint_cmd
+    out_topic: /ambula/left_leg_joint_cmd/smoothed
+    joint_names: [left_hip, left_knee]
+
+    profile: s_curve       # rectangle | trapezoid | s_curve
+
+    v_max: [5.0, 5.0]      # rad/s
+    a_max: [10.0, 10.0]    # rad/s^2
+    j_max: [100.0, 100.0]  # rad/s^3 (ใช้เฉพาะ s_curve)
+
+    publish_rate: 200.0
+    dt_profile: 0.002
+
+right_leg_joint_smoother:
+  ros__parameters:
+    state_topic: /joint_states/hardware
+    target_topic: /ambula/right_leg_joint_cmd
+    out_topic: /ambula/right_leg_joint_cmd/smoothed
+    joint_names: [right_hip, right_knee]
+
+    profile: s_curve       # rectangle | trapezoid | s_curve
+
+    v_max: [5.0, 5.0]      # rad/s
+    a_max: [10.0, 10.0]    # rad/s^2
+    j_max: [100.0, 100.0]  # rad/s^3 (ใช้เฉพาะ s_curve)
+
+    publish_rate: 200.0
+    dt_profile: 0.002
+
+
+convert_to_left_motor:
+  ros__parameters:
+    joint_in_topic: /ambula/right_leg_joint_cmd
+    motor_out_topic: /cmd_joint/left
+    print_debug: true
+
+    waist:
+      pos_scale: 1.0
+      offset_deg: 0.0
+      flip: false
+      direction: +1
+    
+    hip:
+      pos_scale: 0.314159265
+      offset_deg: 70.0
+      flip: true
+      direction: -1
+    
+    knee:
+      pos_scale: 0.628318531
+      offset_deg: 150.0
+      flip: false
+      direction: -1
+
+convert_to_right_motor:
+  ros__parameters:
+    joint_in_topic: /ambula/right_leg_joint_cmd
+    motor_out_topic: /cmd_joint/right
+    print_debug: true
+
+    waist:
+      pos_scale: 1.0
+      offset_deg: 0.0
+      flip: false
+      direction: +1
+    
+    hip:
+      pos_scale: 0.314159265
+      offset_deg: 71.5
+      flip: false
+      direction: -1
+    
+    knee:
+      pos_scale: 0.628318531
+      offset_deg: 137.0
+      flip: true
+      direction: -1

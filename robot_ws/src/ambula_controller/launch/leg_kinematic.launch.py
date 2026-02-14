@@ -15,33 +15,54 @@ def generate_launch_description():
     )
 
     ld = LaunchDescription()
-    node_joint_converter = Node(
+    node_height_adjust = Node(
         package="ambula_controller",
-        executable="joint_converter.py",
-        name="joint_converter",
+        executable="height_adjust",
+        name="height_adjust",
         parameters=[{leg_kinematic_config_path}]
     )
-    node_joint_visualizer = Node(
+    node_left_leg_inverse_kinematic = Node(
         package="ambula_controller",
-        executable="joint_visualizer.py",
-        name="joint_visualizer",
+        executable="inverse_kinematic",
+        name="left_leg_inverse_kinematic",
         parameters=[{leg_kinematic_config_path}]
     )
-    node_fk_left = Node(
+    node_right_leg_inverse_kinematic = Node(
         package="ambula_controller",
-        executable="forward_kinematic.py",
-        name="left_leg_forward_kinematics",
-        parameters=[leg_kinematic_config_path],
+        executable="inverse_kinematic",
+        name="right_leg_inverse_kinematic",
+        parameters=[{leg_kinematic_config_path}]
     )
-    node_fk_right = Node(
+    node_left_leg_joint_smoother = Node(
         package="ambula_controller",
-        executable="forward_kinematic.py",
-        name="right_leg_forward_kinematics",
-        parameters=[leg_kinematic_config_path],
+        executable="joint_smoother_cpp",
+        name="left_leg_joint_smoother",
+        parameters=[{leg_kinematic_config_path}]
+    )
+    node_right_leg_joint_smoother = Node(
+        package="ambula_controller",
+        executable="joint_smoother_cpp",
+        name="right_leg_joint_smoother",
+        parameters=[{leg_kinematic_config_path}]
+    )
+    node_convert_to_left_motor = Node(
+        package="ambula_controller",
+        executable="convert_to_motor",
+        name="convert_to_left_motor",
+        parameters=[{leg_kinematic_config_path}]
+    )
+    node_convert_to_right_motor = Node(
+        package="ambula_controller",
+        executable="convert_to_motor",
+        name="convert_to_right_motor",
+        parameters=[{leg_kinematic_config_path}]
     )
 
-    ld.add_action(node_joint_converter)
-    # ld.add_action(node_joint_visualizer)
-    ld.add_action(node_fk_left)
-    ld.add_action(node_fk_right)
+    ld.add_action(node_height_adjust)
+    ld.add_action(node_left_leg_inverse_kinematic)
+    ld.add_action(node_right_leg_inverse_kinematic)
+    # ld.add_action(node_left_leg_joint_smoother)
+    # ld.add_action(node_right_leg_joint_smoother)
+    ld.add_action(node_convert_to_left_motor)
+    ld.add_action(node_convert_to_right_motor)
     return ld

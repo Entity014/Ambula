@@ -8,171 +8,123 @@ from rclpy.qos import QoSProfile, ReliabilityPolicy, HistoryPolicy
 
 from nav_msgs.msg import Odometry
 from geometry_msgs.msg import Twist
-from geometry_msgs.msg import PoseStamped
 
-def wrap_pi(a: float) -> float:
-    while a <= -math.pi:
-        a += 2.0 * math.pi
-    while a > math.pi:
-        a -= 2.0 * math.pi
-    return a
 
-def yaw_from_quat(x, y, z, w) -> float:
-    siny_cosp = 2.0 * (w * z + x * y)
-    cosy_cosp = 1.0 - 2.0 * (y * y + z * z)
-    return math.atan2(siny_cosp, cosy_cosp)
+def clamp(x: float, lo: float, hi: float) -> float:
+    return max(lo, min(hi, x))
 
-class GoToGoalController(Node):
+
+class PositionPDToVref(Node):
+    """
+    PD position controller -> velocity reference (v_ref) publisher.
+
+    - Sub:  /odom  (nav_msgs/Odometry)
+    - Pub:  /cmd_vel (geometry_msgs/Twist)
+            linear.x  = v_ref
+            angular.z = 0.0
+
+    Control law (1D along x):
+        e = x_goal - x
+        v_ref = Kp * e + Kd * (0 - v_meas)   # D term uses measured velocity to add damping
+    """
+
     def __init__(self):
-        super().__init__('go_to_goal_controller')
+        super().__init__("position_pd_to_vref")
 
-        # ===== gains / limits =====
-        self.declare_parameter('k_rho',   0.8)
-        self.declare_parameter('k_alpha', 2.0)
-        self.declare_parameter('k_beta', -0.5)
+        # ---- parameters ----
+        self.declare_parameter("odom_topic", "/odom")
+        self.declare_parameter("cmd_vel_topic", "/cmd_vel")
 
-        self.declare_parameter('v_max', 0.6)
-        self.declare_parameter('w_max', 2.0)
-        self.declare_parameter('goal_tol_xy', 0.03)
-        self.declare_parameter('goal_tol_yaw', 0.05)
-        self.declare_parameter('control_rate_hz', 50.0)
+        self.declare_parameter("x_goal", 0.0)      # target position (m) in odom frame
+        self.declare_parameter("kp", 0.8)          # [1/s]
+        self.declare_parameter("kd", 0.2)          # [-]  (effectively damping)
+        self.declare_parameter("max_v", 0.6)       # [m/s] saturation
+        self.declare_parameter("deadband", 0.01)   # [m]  stop if close enough
+        self.declare_parameter("stale_timeout", 0.5)  # [s] safety: if odom not updated -> command 0
 
-        # ===== default goal =====
-        self.declare_parameter('goal_x', 0.0)
-        self.declare_parameter('goal_y', 0.0)
-        self.declare_parameter('goal_yaw', 0.0)
-
-        # ===== topics / frames (from config) =====
-        self.declare_parameter('odom_topic', '/odom')
-        self.declare_parameter('cmd_vel_topic', '/cmd_vel')
-        self.declare_parameter('goal_topic', '/goal_pose')
-        self.declare_parameter('odom_frame', 'odom')
-        self.declare_parameter('base_frame', 'base_link')
-
-        self.odom_topic = str(self.get_parameter('odom_topic').value)
-        self.cmd_vel_topic = str(self.get_parameter('cmd_vel_topic').value)
-        self.goal_topic = str(self.get_parameter('goal_topic').value)
-
-        self.odom_frame = str(self.get_parameter('odom_frame').value)
-        self.base_frame = str(self.get_parameter('base_frame').value)
-
-        # ===== state =====
+        # ---- state ----
+        self.last_odom_time = None
         self.x = 0.0
-        self.y = 0.0
-        self.yaw = 0.0
-        self.have_odom = False
+        self.vx = 0.0
 
-        self.goal_x = float(self.get_parameter('goal_x').value)
-        self.goal_y = float(self.get_parameter('goal_y').value)
-        self.goal_yaw = float(self.get_parameter('goal_yaw').value)
-
-        # ===== QoS =====
-        qos_odom = QoSProfile(
-            reliability=ReliabilityPolicy.BEST_EFFORT,
+        # ---- QoS ----
+        qos = QoSProfile(
+            reliability=ReliabilityPolicy.RELIABLE,
             history=HistoryPolicy.KEEP_LAST,
-            depth=5
+            depth=10,
         )
 
-        # ===== ROS interfaces =====
-        self.sub_odom = self.create_subscription(
-            Odometry, self.odom_topic, self.odom_cb, qos_odom
-        )
+        odom_topic = self.get_parameter("odom_topic").value
+        cmd_vel_topic = self.get_parameter("cmd_vel_topic").value
 
-        self.sub_goal = self.create_subscription(
-            PoseStamped, self.goal_topic, self.goal_cb, 10
-        )
+        self.sub = self.create_subscription(Odometry, odom_topic, self.odom_cb, 10)
+        self.pub = self.create_publisher(Twist, cmd_vel_topic, 10)
 
-        self.pub_cmd = self.create_publisher(
-            Twist, self.cmd_vel_topic, 10
-        )
-
-        rate = float(self.get_parameter('control_rate_hz').value)
-        self.timer = self.create_timer(1.0 / rate, self.control_loop)
+        # publish rate
+        self.timer = self.create_timer(0.02, self.control_step)  # 50 Hz
 
         self.get_logger().info(
-            f"GoToGoalController started.\n"
-            f"  odom_topic: {self.odom_topic}\n"
-            f"  goal_topic: {self.goal_topic}\n"
-            f"  cmd_vel_topic: {self.cmd_vel_topic}\n"
-            f"  frames: {self.odom_frame} -> {self.base_frame}"
+            f"PositionPDToVref started. sub={odom_topic}, pub={cmd_vel_topic}"
         )
 
     def odom_cb(self, msg: Odometry):
-        # (optional) check frame if you want strictness
-        # if msg.header.frame_id and msg.header.frame_id != self.odom_frame:
-        #     return
+        self.x = float(msg.pose.pose.position.x)
+        self.vx = float(msg.twist.twist.linear.x)
+        self.last_odom_time = self.get_clock().now()
 
-        p = msg.pose.pose.position
-        q = msg.pose.pose.orientation
-        self.x = float(p.x)
-        self.y = float(p.y)
-        self.yaw = yaw_from_quat(q.x, q.y, q.z, q.w)
-        self.have_odom = True
-
-    def goal_cb(self, msg: PoseStamped):
-        self.goal_x = float(msg.pose.position.x)
-        self.goal_y = float(msg.pose.position.y)
-        q = msg.pose.orientation
-        self.goal_yaw = yaw_from_quat(q.x, q.y, q.z, q.w)
-
-        self.get_logger().info(
-            f"New goal: x={self.goal_x:.3f}, y={self.goal_y:.3f}, yaw={self.goal_yaw:.3f}"
-        )
-
-    def control_loop(self):
-        if not self.have_odom:
+    def control_step(self):
+        # safety: if odom stale -> stop
+        stale_timeout = float(self.get_parameter("stale_timeout").value)
+        now = self.get_clock().now()
+        if self.last_odom_time is None or (now - self.last_odom_time).nanoseconds * 1e-9 > stale_timeout:
+            self.publish_cmd(0.0)
             return
 
-        k_rho   = float(self.get_parameter('k_rho').value)
-        k_alpha = float(self.get_parameter('k_alpha').value)
-        k_beta  = float(self.get_parameter('k_beta').value)
+        x_goal = float(self.get_parameter("x_goal").value)
+        kp = float(self.get_parameter("kp").value)
+        kd = float(self.get_parameter("kd").value)
+        max_v = float(self.get_parameter("max_v").value)
+        deadband = float(self.get_parameter("deadband").value)
 
-        v_max = float(self.get_parameter('v_max').value)
-        w_max = float(self.get_parameter('w_max').value)
-        tol_xy = float(self.get_parameter('goal_tol_xy').value)
-        tol_yaw = float(self.get_parameter('goal_tol_yaw').value)
+        e = x_goal - self.x
 
-        dx = self.goal_x - self.x
-        dy = self.goal_y - self.y
-        rho = math.hypot(dx, dy)
+        # deadband on position
+        if abs(e) < deadband:
+            self.publish_cmd(0.0)
+            return
 
-        yaw_err = wrap_pi(self.goal_yaw - self.yaw)
-        # if rho < tol_xy and abs(yaw_err) < tol_yaw:
-        #     self.publish_cmd(0.0, 0.0)
-        #     return
+        # PD -> velocity reference
+        # D term uses measured velocity for damping (no derivative of noisy position needed)
+        v_ref = kp * e + kd * (0.0 - self.vx)
 
-        goal_heading = math.atan2(dy, dx)
-        alpha = wrap_pi(goal_heading - self.yaw)
-        beta = wrap_pi(self.goal_yaw - goal_heading)
+        # saturate
+        v_ref = clamp(v_ref, -max_v, max_v)
 
-        v = k_rho * rho
-        w = k_alpha * alpha + k_beta * beta
+        self.publish_cmd(v_ref)
 
-        if abs(alpha) > (math.pi / 2.0):
-            v = -v
-
-        v = max(-v_max, min(v_max, v))
-        w = max(-w_max, min(w_max, w))
-
-        self.publish_cmd(v, w)
-
-    def publish_cmd(self, v: float, w: float):
+    def publish_cmd(self, v_ref: float):
         msg = Twist()
-        msg.linear.x = float(v)
-        msg.angular.z = float(w)
-        self.pub_cmd.publish(msg)
+        msg.linear.x = float(v_ref)
+        msg.linear.y = 0.0
+        msg.linear.z = 0.0
+        msg.angular.x = 0.0
+        msg.angular.y = 0.0
+        msg.angular.z = 0.0  # ขอแค่ v_ref ก่อน
+        self.pub.publish(msg)
+
 
 def main():
     rclpy.init()
-    node = GoToGoalController()
+    node = PositionPDToVref()
     try:
         rclpy.spin(node)
     except KeyboardInterrupt:
         pass
     finally:
-        node.publish_cmd(0.0, 0.0)
+        node.publish_cmd(0.0)
         node.destroy_node()
         rclpy.shutdown()
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     main()

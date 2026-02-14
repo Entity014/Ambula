@@ -1,0 +1,78 @@
+joint_converter:
+  ros__parameters:
+    input_topic: /joint_states/hardware
+    output_topic: /joint_states/converted
+
+    # เลือกหน่วย output ของ JointState: "rad" หรือ "deg"
+    output_unit: rad
+
+    # ใส่ config เป็น string แล้วให้ node parse เอง
+    joint_config_yaml: |
+      left_waist:  {mode: waist_rad, offset_deg: 0.0, flip: false, direction: 1}
+      left_hip:    {mode: map_rev, rev_min: -1.8, rev_max: 7.8, deg_max: 180.0, offset_deg: 180.0, flip: true, flip_limits: true, direction: -1}
+      left_knee:   {mode: map_rev, rev_min: 0.0, rev_max: 1.8, deg_max: 70.0,  offset_deg: 70.0, flip: false, flip_limits: true, direction: -1}
+      left_wheel:  {mode: wheel_rev, offset_deg: 0.0, flip: true, direction: 1}
+
+      right_waist: {mode: waist_rad, offset_deg: 0.0, flip: false, direction: 1}
+      right_hip:   {mode: map_rev, rev_min: -7.2, rev_max: 2.2, deg_max: 180.0, offset_deg: 180.0, flip: false, flip_limits: true, direction: -1}
+      right_knee:  {mode: map_rev, rev_min: -1.4, rev_max: 0.4, deg_max: 70.0,  offset_deg: 70.0, flip: true, flip_limits: true, direction: -1}
+      right_wheel: {mode: wheel_rev, offset_deg: 0.0, flip: false, direction: 1}
+
+joint_visualizer:
+  ros__parameters:
+    input_topic: /joint_states/converted
+    output_topic: /joint_states
+
+left_leg_forward_kinematics:
+  ros__parameters:
+    input_topic: /joint_states/converted
+    output_topic: /ambula/left_foot_point
+
+    base_frame: base_link
+    rr_foot_frame: left_foot
+    publish_tf: true
+
+    waist_name: left_waist
+    hip_name: left_hip
+    knee_name: left_knee
+
+    waist_offset_deg: 0.0
+    hip_offset_deg: 0.0
+    knee_offset_deg: 0.0
+
+    hip_x: 0.0
+    hip_y: 0.2
+    hip_z: 0.0
+
+    L1: 0.2
+    L2: 0.24
+    L3: 0.0
+
+    align_y: 1.5707963267948966
+
+right_leg_forward_kinematics:
+  ros__parameters:
+    input_topic: /joint_states/converted
+    output_topic: /ambula/right_foot_point
+
+    base_frame: base_link
+    rr_foot_frame: right_foot
+    publish_tf: true
+
+    waist_name: right_waist
+    hip_name: right_hip
+    knee_name: right_knee
+
+    waist_offset_deg: 0.0
+    hip_offset_deg: 0.0
+    knee_offset_deg: 0.0
+
+    hip_x: 0.0
+    hip_y: -0.2
+    hip_z: 0.0
+
+    L1: 0.2
+    L2: 0.24
+    L3: 0.0
+
+    align_y: 1.5707963267948966

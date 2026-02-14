@@ -110,7 +110,7 @@ rcl_timer_t control_timer;
 rcl_init_options_t init_options;
 
 unsigned long long time_offset = 0;
-unsigned long prev_cmd_time = 0;
+unsigned long prev_cmd_time = 0, payload_pulse_start_ms = 0;
 
 enum connection_states
 {
@@ -126,6 +126,27 @@ enum robot_states
     SLIDE,
     OPERATING,
 } robot_state;
+
+robot_states prev_robot_state = IDLE;
+
+enum payload_states
+{
+    HOLD,
+    DEPLOY,
+} payload_state;
+
+payload_states prev_payload_state = HOLD;
+
+bool payload_pulsing = false;
+
+enum light_states
+{
+    TURN_ON,
+    BLINK,
+    TURN_OFF,
+} light_state;
+
+light_states prev_light_state = TURN_ON;
 
 Kinematics kinematics(
     Kinematics::DIFFERENTIAL_DRIVE,
@@ -171,7 +192,7 @@ struct LqrGains
 };
 
 static const LqrGains K = {
-    -3.9739f, 0.3423f, -0.572f, 0.0f,
+    -4.50028241f, 0.357729496f, -0.734247123, 0.0f,
     0.0f, 0.0f, 0.0f, 0.0472f};
 
 static inline float clampf(float x, float lo, float hi)
@@ -237,6 +258,7 @@ void lqr_isr()
 void flashLED(int n_times);
 void rclErrorLoop();
 void syncTime();
+void changeMode();
 void moveBase();
 void moveActuator();
 void publishData();
@@ -314,6 +336,8 @@ bool setupCan()
 void setup()
 {
     pinMode(LED_PIN, OUTPUT);
+    pinMode(PAYLOAD_PIN, OUTPUT);
+    digitalWrite(PAYLOAD_PIN, HIGH);
 
     Wire.begin();
     bool imu_ok = imuSensor.init();
@@ -445,34 +469,50 @@ void heightCallback(const void *msgin)
 void robotCommandCallback(const void *msgin)
 {
     auto *m = (const geometry_msgs__msg__Point *)msgin;
-    switch (int(m->x))
+    robot_state_msg = *m;
+
+    switch (int(robot_state_msg.x))
     {
     case IDLE:
         robot_state = IDLE;
-        lqr_enable = false;
-        all_odrives_idle();
-        wheels_set_velocity_mode();
         break;
     case SLIDE:
         robot_state = SLIDE;
-        lqr_enable = false;
-        all_odrives_closed();
-        wheels_set_velocity_mode();
         break;
     case OPERATING:
         robot_state = OPERATING;
-        lqr_enable = false;
-        tau_L_cmd = 0;
-        tau_R_cmd = 0;
-        all_odrives_closed();
-        wheels_set_torque_mode();
-        lqr_enable = true;
         break;
     default:
         robot_state = IDLE;
-        lqr_enable = false;
-        all_odrives_idle();
-        wheels_set_velocity_mode();
+        break;
+    }
+
+    switch (int(robot_state_msg.y))
+    {
+    case HOLD:
+        payload_state = HOLD;
+        break;
+    case DEPLOY:
+        payload_state = DEPLOY;
+        break;
+    default:
+        payload_state = HOLD;
+        break;
+    }
+
+    switch (int(robot_state_msg.z))
+    {
+    case TURN_ON:
+        light_state = TURN_ON;
+        break;
+    case BLINK:
+        light_state = BLINK;
+        break;
+    case TURN_OFF:
+        light_state = TURN_OFF;
+        break;
+    default:
+        light_state = TURN_ON;
         break;
     }
 }
@@ -483,6 +523,7 @@ void controlCallback(rcl_timer_t *timer, int64_t last_call_time)
     if (timer != NULL)
     {
         pumpEvents(can_intf);
+        changeMode();
         moveBase();
         moveActuator();
         publishData();
@@ -495,6 +536,40 @@ void controlCallback(rcl_timer_t *timer, int64_t last_call_time)
         // const float alpha = 0.15f;
         // h_filt = h_filt + alpha * (h_local - h_filt);
         // debug_msg.linear.z = h_filt;
+    }
+}
+
+void changeMode()
+{
+    if (prev_robot_state != robot_state)
+    {
+        switch (robot_state)
+        {
+        case IDLE:
+            lqr_enable = false;
+            all_odrives_idle();
+            wheels_set_velocity_mode();
+            break;
+        case SLIDE:
+            lqr_enable = false;
+            all_odrives_closed();
+            wheels_set_velocity_mode();
+            break;
+        case OPERATING:
+            lqr_enable = false;
+            tau_L_cmd = 0;
+            tau_R_cmd = 0;
+            all_odrives_closed();
+            wheels_set_torque_mode();
+            lqr_enable = true;
+            break;
+        default:
+            lqr_enable = false;
+            all_odrives_idle();
+            wheels_set_velocity_mode();
+            break;
+        }
+        prev_robot_state = robot_state;
     }
 }
 
@@ -544,6 +619,49 @@ void moveBase()
 
 void moveActuator()
 {
+    if (prev_payload_state != payload_state)
+    {
+        if (payload_state == DEPLOY)
+        {
+            payload_pulsing = true;
+            payload_pulse_start_ms = millis();
+
+            digitalWrite(PAYLOAD_PIN, LOW);
+        }
+        else
+        {
+            payload_pulsing = false;
+
+            digitalWrite(PAYLOAD_PIN, HIGH);
+        }
+    }
+    prev_payload_state = payload_state;
+
+    if (payload_pulsing)
+    {
+        if (millis() - payload_pulse_start_ms >= PAYLOAD_PULSE_MS)
+        {
+            payload_pulsing = false;
+            payload_state = HOLD;            // กลับเป็น HOLD
+            digitalWrite(PAYLOAD_PIN, HIGH); // ปิดคอยล์
+        }
+    }
+
+    if (prev_light_state != light_state)
+    {
+        switch (light_state)
+        {
+        case TURN_ON:
+            break;
+        case BLINK:
+            break;
+        case TURN_OFF:
+            break;
+        default:
+            break;
+        }
+    }
+    prev_light_state = light_state;
 }
 
 void publishData()

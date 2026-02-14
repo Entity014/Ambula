@@ -1,36 +1,23 @@
-go_to_goal_controller:
+position_pd_to_vref:
   ros__parameters:
 
-    # ===== Controller gains =====
-    # distance -> linear velocity
-    k_rho: 1.5          # [1/s]  เพิ่ม = เข้าหาเป้าเร็วขึ้น
-
-    # heading -> angular velocity
-    k_alpha: 2.0        # [1/s]  เพิ่ม = หันหัวไวขึ้น
-    k_beta: -0.5        # [1/s]  damping ตอนใกล้เป้า
-
-    # ===== Velocity limits =====
-    v_max: 0.8          # [m/s]  จำกัด v_ref ส่งไป Teensy
-    w_max: 2.0          # [rad/s]
-
-    # ===== Goal tolerance =====
-    goal_tol_xy: 0.03   # [m]    ระยะที่ถือว่าถึงเป้า
-    goal_tol_yaw: 0.05  # [rad]
-
-    # ===== Control loop =====
-    control_rate_hz: 50.0   # Hz (แนะนำ 30–50 Hz)
-
-    # ===== Default goal =====
-    # ใช้สำหรับ "hold position"
-    goal_x: 0.0
-    goal_y: 0.0
-    goal_yaw: 0.0
-
-    # ===== Topic names =====
-    odom_topic: "/odom/data_raw"   # ของคุณใช้ odom/data_raw
+    # ---------- topics ----------
+    odom_topic: "/odom"
     cmd_vel_topic: "/cmd_vel"
-    goal_topic: "/goal_pose"
 
-    # ===== Frame =====
-    odom_frame: "odom"
-    base_frame: "base_link"
+    # ---------- goal ----------
+    # เป้าหมายตำแหน่งตามแกน x (odom frame)
+    # ใช้ 0.0 = ยืนอยู่กับที่
+    x_goal: 0.0            # [m]
+
+    # ---------- PD gains ----------
+    # v_ref = kp * (x_goal - x) + kd * (0 - v_meas)
+    kp: 0.8                # [1/s]  position → velocity
+    kd: 0.25               # [-]    damping จาก v_meas
+
+    # ---------- limits ----------
+    max_v: 0.5             # [m/s] จำกัด v_ref ไม่ให้ LQR โดนกระชาก
+    deadband: 0.01         # [m]    ใกล้เป้าแล้วหยุด
+
+    # ---------- safety ----------
+    stale_timeout: 0.5     # [s]    ถ้า odom ไม่มา → ส่ง v_ref = 0
