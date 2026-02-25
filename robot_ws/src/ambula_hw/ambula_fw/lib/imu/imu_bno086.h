@@ -109,7 +109,7 @@ public:
     BNO086IMU()
     {
         rosidl_runtime_c__String__init(&imu_msg_.header.frame_id);
-        rosidl_runtime_c__String__assign(&imu_msg_.header.frame_id, "imu_link");
+        rosidl_runtime_c__String__assign(&imu_msg_.header.frame_id, "imu_base_link");
 
         accel_.x = accel_.y = accel_.z = 0.0f;
         gyro_.x = gyro_.y = gyro_.z = 0.0f;
@@ -130,6 +130,8 @@ public:
             return false;
         if (!bno086.enableGyroIntegratedRotationVector())
             return false;
+
+        Wire.setClock(300000); // increase I2C clock to 400kHz for better performance
 
         return true;
     }

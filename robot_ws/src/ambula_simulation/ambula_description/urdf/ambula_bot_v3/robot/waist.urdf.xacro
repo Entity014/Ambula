@@ -1,0 +1,40 @@
+<?xml version="1.0"?>
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro">
+    <xacro:macro name="waist" params="side length width height pos_x pos_y pos_z mass">
+        <link name="${side}_waist_link">
+            <visual>
+                <origin xyz="0 0 0" rpy="${-pi/2} 0 0"/>
+                    <geometry>
+                        <mesh filename="package://ambula_description/meshs/${side}_waist.stl" scale="1 1 1"/>
+                    </geometry>
+                <material name="orange">
+                    <color rgba="0.8 0.15 0.0 1.0"/>
+                </material>
+            </visual>
+
+            <collision>
+                <origin xyz="0 0 0" rpy="${-pi/2} 0 0"/>
+                    <geometry>
+                        <mesh filename="package://ambula_description/meshs/${side}_waist.stl" scale="1 1 1"/>
+                    </geometry>
+            </collision>
+
+            <inertial>
+                <origin xyz="0 0 0" rpy="0 0 0"/>
+                <mass value="${mass}"/>
+                <inertia ixx="${(1/12) * mass * ((width  * width)  + (height * height))}" ixy="0.0" ixz="0.0" iyy="${(1/12) * mass * ((length * length) + (height * height))}" iyz="0.0" izz="${(1/12) * mass * ((length * length) + (width  * width))}"/>
+            </inertial>
+        </link>
+
+        <joint name="${side}_waist_joint" type="revolute">
+            <axis xyz="1 0 0" />
+            <origin xyz="${pos_x} ${pos_y} ${pos_z}" />
+            <parent link="base_link" />
+            <child link="${side}_waist_link" />
+            <limit effort="1000" lower="${-pi/4}" upper="${pi/4}" velocity="10" />
+            <dynamics damping="5.0" friction="3.0"/>
+        </joint>
+
+    </xacro:macro>
+
+</robot>

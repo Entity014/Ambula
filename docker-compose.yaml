@@ -109,7 +109,7 @@ services:
 
   uros1-agent:
     extends: uros-agent
-    command: ros2 run micro_ros_agent micro_ros_agent serial -D /dev/ttyACM0 serial -b 115200
+    command: ros2 run micro_ros_agent micro_ros_agent serial -D /dev/ttyACM0 serial -b 921600
 
   dev:
     extends:

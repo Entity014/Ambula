@@ -63,6 +63,6 @@ def generate_launch_description():
     ld.add_action(node_right_leg_inverse_kinematic)
     # ld.add_action(node_left_leg_joint_smoother)
     # ld.add_action(node_right_leg_joint_smoother)
-    ld.add_action(node_convert_to_left_motor)
-    ld.add_action(node_convert_to_right_motor)
+    # ld.add_action(node_convert_to_left_motor)
+    # ld.add_action(node_convert_to_right_motor)
     return ld

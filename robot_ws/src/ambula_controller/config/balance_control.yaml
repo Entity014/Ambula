@@ -1,23 +1,56 @@
-position_pd_to_vref:
+wbc_node:
   ros__parameters:
+    # ======================================================
+    # Paths and System
+    # ======================================================
+    urdf_path: "/home/robot_ws/src/ambula_simulation/ambula_description/urdf/ambula_bot_v3/ambula.urdf"
+    control_rate_hz: 100.0
 
-    # ---------- topics ----------
-    odom_topic: "/odom"
-    cmd_vel_topic: "/cmd_vel"
+    # ======================================================
+    # WBC Weights (Priority Tuning)
+    # ======================================================
+    weight_height: 5.0
+    weight_roll: 20.0
+    weight_lqr_pitch: 30.0
+    weight_yaw: 0.0
+    weight_posture: 1.0
 
-    # ---------- goal ----------
-    # เป้าหมายตำแหน่งตามแกน x (odom frame)
-    # ใช้ 0.0 = ยืนอยู่กับที่
-    x_goal: 0.0            # [m]
+    # ======================================================
+    # PD Gains
+    # ======================================================
+    kp_z: 100.0
+    kd_z: 20.0
 
-    # ---------- PD gains ----------
-    # v_ref = kp * (x_goal - x) + kd * (0 - v_meas)
-    kp: 0.8                # [1/s]  position → velocity
-    kd: 0.25               # [-]    damping จาก v_meas
+    kp_roll: 120.0
+    kd_roll: 40.0
 
-    # ---------- limits ----------
-    max_v: 0.5             # [m/s] จำกัด v_ref ไม่ให้ LQR โดนกระชาก
-    deadband: 0.01         # [m]    ใกล้เป้าแล้วหยุด
+    kp_yaw: 50.0
+    kd_yaw: 10.0
 
-    # ---------- safety ----------
-    stale_timeout: 0.5     # [s]    ถ้า odom ไม่มา → ส่ง v_ref = 0
+    kp_posture: 1.0
+    kd_posture: 0.5
+
+    # ======================================================
+    # Hardware / Contact Constraints
+    # ======================================================
+    tau_limit: 40.0      # fallback ถ้าไม่ได้ตั้ง per-joint
+    friction_mu: 0.6
+
+    # ======================================================
+    # NEW: Per-joint torque limits (เลือกใช้ "อย่างใดอย่างหนึ่ง")
+    #
+    # (A) tau_limits: list ตามลำดับ actuated joints ที่ node print ตอน start:
+    #     "Actuated joints (na=...): [....]"
+    #     *** ต้องยาวเท่ากับ na เท่านั้น ***
+    #
+    # (B) tau_override: map-string แบบ "joint:Nm,joint:Nm,..."
+    #     ใช้ได้แม้ไม่รู้ลำดับ แต่ชื่อ joint ต้องตรง URDF เป๊ะ
+    # ======================================================
+
+    # ---------- (A) แบบ list ตามลำดับ actuated ----------
+    # ตัวอย่างสำหรับ Ambula (สมมติ order: left_waist,left_hip,left_knee,left_wheel,right_waist,right_hip,right_knee,right_wheel)
+    # ถ้า order ของคุณต่าง ให้แก้ตาม log ที่ node พิมพ์
+    tau_limits: [20.0, 40.0, 10.0, 0.1, 20.0, 40.0, 10.0, 0.1]
+
+    # ถ้าเปิดใช้แบบนี้ แนะนำให้ตั้ง tau_limits เป็น [] หรือคอมเมนต์ทิ้ง
+    # tau_override: "left_waist_joint:20,left_hip_joint:60,left_knee_joint:45,left_wheel_joint:20,right_waist_joint:20,right_hip_joint:60,right_knee_joint:45,right_wheel_joint:20"

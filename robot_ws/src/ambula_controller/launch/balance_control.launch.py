@@ -15,12 +15,12 @@ def generate_launch_description():
     )
 
     ld = LaunchDescription()
-    node_position_control = Node(
+    node_wbc_node = Node(
         package="ambula_controller",
-        executable="position_control.py",
-        name="go_to_goal_controller",
+        executable="wbc_node.py",
+        name="wbc_node",
         parameters=[{balance_control_config_path}]
     )
 
-    ld.add_action(node_position_control)
+    ld.add_action(node_wbc_node)
     return ld

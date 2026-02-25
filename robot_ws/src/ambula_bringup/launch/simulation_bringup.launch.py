@@ -61,8 +61,8 @@ def generate_launch_description():
         [
             gazebo_launch,
             spawn_ambula_launch,
-            leg_kinematic_sim_launch,
-            wheel_kinematic_sim_launch,
-            state_estimation_launch,
+            # leg_kinematic_sim_launch,
+            # wheel_kinematic_sim_launch,
+            # state_estimation_launch,
         ]
     )

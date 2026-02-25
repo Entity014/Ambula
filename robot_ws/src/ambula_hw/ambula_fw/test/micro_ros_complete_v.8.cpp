@@ -85,6 +85,7 @@ enum JointIndex
 
 rcl_publisher_t imu_publisher;
 rcl_publisher_t joint_state_publisher;
+rcl_publisher_t joint_state_motor_publisher;
 rcl_publisher_t left_foot_publisher;
 rcl_publisher_t right_foot_publisher;
 rcl_publisher_t odom_publisher;
@@ -96,14 +97,15 @@ rcl_subscription_t robot_state_subscriber;
 
 sensor_msgs__msg__Imu imu_msg;
 sensor_msgs__msg__JointState joint_state_msg;
+sensor_msgs__msg__JointState joint_state_motor_msg;
 nav_msgs__msg__Odometry odom_msg;
 geometry_msgs__msg__Point robot_state_msg;
 geometry_msgs__msg__Point left_foot_msg;
 geometry_msgs__msg__Point right_foot_msg;
+geometry_msgs__msg__Point left_leg_msg;
+geometry_msgs__msg__Point right_leg_msg;
 geometry_msgs__msg__Twist twist_msg;
 geometry_msgs__msg__Twist debug_msg;
-geometry_msgs__msg__Twist left_leg_msg;
-geometry_msgs__msg__Twist right_leg_msg;
 
 rclc_executor_t executor;
 rclc_support_t support;
@@ -200,7 +202,6 @@ float wheel_pos_r_rad = 0.0f;
 uint32_t last_odom_ms = 0;
 bool got_left_wheel = false;
 bool got_right_wheel = false;
-
 //------------------------------ < LQR > ------------------------------//
 
 static IntervalTimer lqr_timer;
@@ -517,14 +518,14 @@ void twistCallback(const void *msgin)
 
 void leftLegCallback(const void *msgin)
 {
+    auto *m = (const geometry_msgs__msg__Point *)msgin;
+    left_leg_msg = *m; // ใช้ y=hip, z=knee ตามที่คุณ setPosition อยู่
 }
 
 void rightLegCallback(const void *msgin)
 {
-}
-
-void heightCallback(const void *msgin)
-{
+    auto *m = (const geometry_msgs__msg__Point *)msgin;
+    right_leg_msg = *m;
 }
 
 void robotCommandCallback(const void *msgin)
@@ -622,6 +623,12 @@ void changeMode()
             tau_R_cmd = 0;
             all_odrives_closed();
             wheels_set_torque_mode();
+
+            left_leg_msg.y = joint_state_motor_msg.position.data[J_LEFT_HIP];
+            left_leg_msg.z = joint_state_motor_msg.position.data[J_LEFT_KNEE];
+            right_leg_msg.y = joint_state_motor_msg.position.data[J_RIGHT_HIP];
+            right_leg_msg.z = joint_state_motor_msg.position.data[J_RIGHT_KNEE];
+
             lqr_enable = true;
             break;
         default:
@@ -665,11 +672,20 @@ void moveBase()
         float tauL = (float)tau_L_cmd;
         float tauR = (float)tau_R_cmd;
 
-        odrv_left_wheel.setTorque(-tauL);
-        odrv_right_wheel.setTorque(tauR);
+        // odrv_left_wheel.setTorque(-tauL);
+        // odrv_right_wheel.setTorque(tauR);
+
+        odrv_left_hip.setPosition(left_leg_msg.y);
+        odrv_left_knee.setPosition(left_leg_msg.z);
+        odrv_right_hip.setPosition(right_leg_msg.y);
+        odrv_right_knee.setPosition(right_leg_msg.z);
 
         debug_msg.linear.x = tauL;
         debug_msg.linear.y = tauR;
+        debug_msg.linear.z = left_leg_msg.y;
+        debug_msg.angular.x = left_leg_msg.z;
+        debug_msg.angular.y = right_leg_msg.y;
+        debug_msg.angular.z = right_leg_msg.z;
     }
     else
     {
@@ -752,10 +768,10 @@ void publishData()
     // 2) ODrive feedback → hip/knee/wheel
     JointCfg maps[] = {
         {&odrv_left_hip, &D_left_hip, J_LEFT_HIP, 2.0f * M_PI / 20.0f, 2.0f * M_PI / 20.0f, 70.0f * DEG2RAD, true, -1, false},
-        {&odrv_left_knee, &D_left_knee, J_LEFT_KNEE, 2.0f * M_PI / 10.0f, 2.0f * M_PI / 10.0f, 150.0f * DEG2RAD, false, -1, false},
+        {&odrv_left_knee, &D_left_knee, J_LEFT_KNEE, 2.0f * M_PI / 10.0f, 2.0f * M_PI / 10.0f, 132.0f * DEG2RAD, false, -1, false},
         {&odrv_left_wheel, &D_left_wheel, J_LEFT_WHEEL, 2.0f * M_PI * 0.67f, 2.0f * M_PI * 0.67f, 0.0f * DEG2RAD, true, +1, false},
-        {&odrv_right_hip, &D_right_hip, J_RIGHT_HIP, 2.0f * M_PI / 20.0f, 2.0f * M_PI / 20.0f, 71.5f * DEG2RAD, false, -1, false},
-        {&odrv_right_knee, &D_right_knee, J_RIGHT_KNEE, 2.0f * M_PI / 10.0f, 2.0f * M_PI / 10.0f, 137.0f * DEG2RAD, true, -1, false},
+        {&odrv_right_hip, &D_right_hip, J_RIGHT_HIP, 2.0f * M_PI / 20.0f, 2.0f * M_PI / 20.0f, 68.0f * DEG2RAD, false, -1, false},
+        {&odrv_right_knee, &D_right_knee, J_RIGHT_KNEE, 2.0f * M_PI / 10.0f, 2.0f * M_PI / 10.0f, 160.3f * DEG2RAD, true, -1, false},
         {&odrv_right_wheel, &D_right_wheel, J_RIGHT_WHEEL, 2.0f * M_PI * 0.67f, 2.0f * M_PI * 0.67f, 0.0f * DEG2RAD, false, +1, false},
     };
 
@@ -768,6 +784,8 @@ void publishData()
             float pos_in = fb.Pos_Estimate;
             float vel_in = fb.Vel_Estimate;
 
+            joint_state_motor_msg.position.data[m.pos_idx] = pos_in;
+
             if (m.flip)
             {
                 pos_in = -pos_in;
@@ -777,13 +795,13 @@ void publishData()
             float pos_out = pos_in * m.pos_scale;
             float vel_out = vel_in * m.vel_scale;
 
+            pos_out += m.pos_offset_rad;
+
             if (m.output_deg)
             {
                 pos_out *= RAD2DEG;
                 vel_out *= RAD2DEG;
             }
-
-            pos_out += m.pos_offset_rad;
 
             const float s = dir_sign(m.direction);
             pos_out *= s;
@@ -884,6 +902,7 @@ void publishData()
 
     RCSOFTCHECK(rcl_publish(&imu_publisher, &imu_msg, NULL));
     RCSOFTCHECK(rcl_publish(&joint_state_publisher, &joint_state_msg, NULL));
+    RCSOFTCHECK(rcl_publish(&joint_state_motor_publisher, &joint_state_motor_msg, NULL));
     RCSOFTCHECK(rcl_publish(&debug_publisher, &debug_msg, NULL));
 }
 
@@ -915,6 +934,11 @@ bool createEntities()
         ROSIDL_GET_MSG_TYPE_SUPPORT(sensor_msgs, msg, JointState),
         "joint_states/hardware"));
     RCCHECK(rclc_publisher_init_default(
+        &joint_state_motor_publisher,
+        &node,
+        ROSIDL_GET_MSG_TYPE_SUPPORT(sensor_msgs, msg, JointState),
+        "joint_states/motor"));
+    RCCHECK(rclc_publisher_init_default(
         &debug_publisher,
         &node,
         ROSIDL_GET_MSG_TYPE_SUPPORT(geometry_msgs, msg, Twist),
@@ -945,6 +969,20 @@ bool createEntities()
         joint_state_msg.effort.data[i] = 0.0;
     }
 
+    rosidl_runtime_c__String__init(&joint_state_motor_msg.header.frame_id);
+    rosidl_runtime_c__String__assign(&joint_state_motor_msg.header.frame_id, "base_link");
+    rosidl_runtime_c__String__Sequence__init(&joint_state_motor_msg.name, N_JOINTS);
+    rosidl_runtime_c__double__Sequence__init(&joint_state_motor_msg.position, N_JOINTS);
+    rosidl_runtime_c__double__Sequence__init(&joint_state_motor_msg.velocity, N_JOINTS);
+    rosidl_runtime_c__double__Sequence__init(&joint_state_motor_msg.effort, N_JOINTS);
+    for (size_t i = 0; i < N_JOINTS; ++i)
+    {
+        rosidl_runtime_c__String__assign(&joint_state_motor_msg.name.data[i], JOINT_NAMES[i]);
+        joint_state_motor_msg.position.data[i] = 0.0;
+        joint_state_motor_msg.velocity.data[i] = 0.0;
+        joint_state_motor_msg.effort.data[i] = 0.0;
+    }
+
     // create twist command subscriber
     RCCHECK(rclc_subscription_init_default(
         &twist_subscriber,
@@ -954,12 +992,12 @@ bool createEntities()
     RCCHECK(rclc_subscription_init_default(
         &left_leg_subscriber,
         &node,
-        ROSIDL_GET_MSG_TYPE_SUPPORT(geometry_msgs, msg, Twist),
+        ROSIDL_GET_MSG_TYPE_SUPPORT(geometry_msgs, msg, Point),
         "cmd_joint/left"));
     RCCHECK(rclc_subscription_init_default(
         &right_leg_subscriber,
         &node,
-        ROSIDL_GET_MSG_TYPE_SUPPORT(geometry_msgs, msg, Twist),
+        ROSIDL_GET_MSG_TYPE_SUPPORT(geometry_msgs, msg, Point),
         "cmd_joint/right"));
     RCCHECK(rclc_subscription_init_default(
         &robot_state_subscriber,
@@ -1023,9 +1061,16 @@ bool destroyEntities()
     rosidl_runtime_c__double__Sequence__fini(&joint_state_msg.velocity);
     rosidl_runtime_c__double__Sequence__fini(&joint_state_msg.effort);
 
+    rosidl_runtime_c__String__fini(&joint_state_motor_msg.header.frame_id);
+    rosidl_runtime_c__String__Sequence__fini(&joint_state_motor_msg.name);
+    rosidl_runtime_c__double__Sequence__fini(&joint_state_motor_msg.position);
+    rosidl_runtime_c__double__Sequence__fini(&joint_state_motor_msg.velocity);
+    rosidl_runtime_c__double__Sequence__fini(&joint_state_motor_msg.effort);
+
     rcl_publisher_fini(&odom_publisher, &node);
     rcl_publisher_fini(&imu_publisher, &node);
     rcl_publisher_fini(&joint_state_publisher, &node);
+    rcl_publisher_fini(&joint_state_motor_publisher, &node);
     rcl_publisher_fini(&left_foot_publisher, &node);
     rcl_publisher_fini(&right_foot_publisher, &node);
     rcl_publisher_fini(&debug_publisher, &node);

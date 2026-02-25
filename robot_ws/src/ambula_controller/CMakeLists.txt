@@ -24,6 +24,9 @@ find_package(std_msgs REQUIRED)
 
 find_package(Eigen3 REQUIRED)
 
+find_package(tf2 REQUIRED)
+find_package(tf2_geometry_msgs REQUIRED)
+
 # --------------------------------------------------
 # C++ Executables
 # --------------------------------------------------
@@ -43,6 +46,9 @@ ament_target_dependencies(height_adjust
   rclcpp
   sensor_msgs
   geometry_msgs
+  std_msgs
+  tf2
+  tf2_geometry_msgs
   Eigen3
 )
 
@@ -93,6 +99,7 @@ install(PROGRAMS
   src/stand_feedforward.py
   src/balance_control.py
   src/position_control.py
+  src/wbc_node.py
   DESTINATION lib/${PROJECT_NAME}
 )
 

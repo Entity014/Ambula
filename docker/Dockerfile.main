@@ -83,7 +83,7 @@ RUN curl -fsSL https://packages.osrfoundation.org/gazebo.gpg \
 
 # ========== Python deps ==========
 RUN pip3 install --no-cache-dir --break-system-packages --ignore-installed \
-    sympy transforms3d pyproj matplotlib evdev pandas "numpy<2"
+    sympy transforms3d pyproj matplotlib evdev pandas "numpy<2" pin osqp
 
 # ========== CycloneDDS ==========
 ENV RMW_IMPLEMENTATION=rmw_cyclonedds_cpp

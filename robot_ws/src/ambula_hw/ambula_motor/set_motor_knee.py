@@ -29,8 +29,8 @@ def main():
 
     # ==== Controller Config ====
     ctrl = axis.controller.config
-    ctrl.pos_gain            = 30.0
-    ctrl.vel_gain            = 0.228
+    ctrl.pos_gain            = 2.0
+    ctrl.vel_gain            = 0.42327402
     ctrl.vel_integrator_gain = 0.0
     ctrl.control_mode        = ControlMode.POSITION_CONTROL
     ctrl.vel_limit           = 30.0    # rev/s

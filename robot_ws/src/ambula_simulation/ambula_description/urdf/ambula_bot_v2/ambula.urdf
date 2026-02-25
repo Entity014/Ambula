@@ -213,7 +213,7 @@
     <axis xyz="1 0 0"/>
     <limit lower="-0.1745" upper="0.7854" effort="150" velocity="6.0"/>
   </joint>
-  <joint name="right_wheel_joint" type="revolute">
+  <joint name="right_wheel_joint" type="continuous">
     <origin rpy="0 0 0" xyz="0.0 -0.177143 -0.156455"/>
     <parent link="right_knee_link"/>
     <child link="right_wheel_link"/>

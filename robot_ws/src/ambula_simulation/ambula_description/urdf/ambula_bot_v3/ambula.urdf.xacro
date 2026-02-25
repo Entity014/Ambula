@@ -1,0 +1,29 @@
+<?xml version="1.0" ?>
+<robot name="ambula_bot" xmlns:xacro="http://ros.org/wiki/xacro">
+  <xacro:include filename="$(find ambula_description)/urdf/ambula_bot_v3/properties.urdf.xacro" />
+  <xacro:include filename="$(find ambula_description)/urdf/ambula_bot_v3/robot/base.urdf.xacro" />
+  <xacro:include filename="$(find ambula_description)/urdf/ambula_bot_v3/robot/waist.urdf.xacro" />
+  <xacro:include filename="$(find ambula_description)/urdf/ambula_bot_v3/robot/hip.urdf.xacro" />
+  <xacro:include filename="$(find ambula_description)/urdf/ambula_bot_v3/robot/knee.urdf.xacro" />
+  <xacro:include filename="$(find ambula_description)/urdf/ambula_bot_v3/robot/wheel.urdf.xacro" />
+  <xacro:include filename="$(find ambula_description)/urdf/ambula_bot_v3/robot/passive_wheel.urdf.xacro" />
+  
+  <!-- Robot -->
+  <xacro:base length="${base_length}" width="${base_width}" height="${base_height}" mass="${base_mass}"/>
+  <xacro:waist side="left" length="${waist_length}" width="${waist_width}" height="${waist_height}" pos_x="${left_waist_pos_x}" pos_y="${left_waist_pos_y}" pos_z="${left_waist_pos_z}" mass="${waist_mass}"/>
+  <xacro:waist side="right" length="${waist_length}" width="${waist_width}" height="${waist_height}" pos_x="${right_waist_pos_x}" pos_y="${right_waist_pos_y}" pos_z="${right_waist_pos_z}" mass="${waist_mass}"/>
+  <xacro:hip side="left" length="${hip_length}" width="${hip_width}" height="${hip_height}" pos_x="${left_hip_pos_x}" pos_y="${left_hip_pos_y}" pos_z="${left_hip_pos_z}" mass="${hip_mass}"/>
+  <xacro:hip side="right" length="${hip_length}" width="${hip_width}" height="${hip_height}" pos_x="${right_hip_pos_x}" pos_y="${right_hip_pos_y}" pos_z="${right_hip_pos_z}" mass="${hip_mass}"/>
+  <xacro:knee side="left" length="${knee_length}" width="${knee_width}" height="${knee_height}" pos_x="${left_knee_pos_x}" pos_y="${left_knee_pos_y}" pos_z="${left_knee_pos_z}" mass="${knee_mass}"/>
+  <xacro:knee side="right" length="${knee_length}" width="${knee_width}" height="${knee_height}" pos_x="${right_knee_pos_x}" pos_y="${right_knee_pos_y}" pos_z="${right_knee_pos_z}" mass="${knee_mass}"/>
+  <xacro:wheel side="left" radius="${wheel_radius}" width="${wheel_width}" pos_x="${left_wheel_pos_x}" pos_y="${left_wheel_pos_y}" pos_z="${left_wheel_pos_z}" mass="${wheel_mass}"/>
+  <xacro:wheel side="right" radius="${wheel_radius}" width="${wheel_width}" pos_x="${right_wheel_pos_x}" pos_y="${right_wheel_pos_y}" pos_z="${right_wheel_pos_z}" mass="${wheel_mass}"/>
+
+  <!-- Sensor -->
+  <xacro:include filename="$(find ambula_description)/urdf/ambula_bot_v3/sensor/depth_camera.urdf.xacro" />
+  <xacro:include filename="$(find ambula_description)/urdf/ambula_bot_v3/sensor/imu_base.urdf.xacro" />
+  <xacro:include filename="$(find ambula_description)/urdf/ambula_bot_v3/sensor/imu_cam.urdf.xacro" />
+
+  <!-- <xacro:ambula_ros2_control/> -->
+
+</robot>

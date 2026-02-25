@@ -1,20 +1,47 @@
 height_adjust:
   ros__parameters:
+
+    # =========================
+    # Topics
+    # =========================
     topic_height_cmd: /ambula/height
     topic_left_foot_target: /ambula/left_foot_target
     topic_right_foot_target: /ambula/right_foot_target
-    
-    default_height: 0.15
-    min_height: 0.15
-    max_height: 0.30
+    topic_imu: /imu/data_raw
 
-    foot_offset_x: 0.02
-    foot_offset_y: 0.2
+    # =========================
+    # Height parameters
+    # =========================
+    default_height: 0.14
+    min_height: 0.14
+    max_height: 0.32
+
+    # =========================
+    # Foot stance offset
+    # =========================
+    foot_offset_x: 0.05
+    foot_offset_y: 0.20
+
+    # =========================
+    # Roll balancing (IMU)
+    # =========================
+    enable_roll_balance: false
+
+    # Gain สำหรับ differential height
+    roll_kp: 0.0        # [m/rad]
+    roll_kd: 0.0        # [m/(rad/s)]
+
+    # Low-pass filter roll (0=ไม่กรอง, 1=ใช้ raw เต็ม)
+    roll_lp_alpha: 1.0
+
+    # Publish rate
+    publish_rate_hz: 10.0
+
 
 left_leg_inverse_kinematic:
   ros__parameters:
     target_topic: /ambula/left_foot_target
-    cmd_topic: /ambula/left_leg_joint_cmd
+    cmd_topic: /cmd_joint/left
     print_deg: true
 
     waist_offset_deg: 0.0
@@ -35,7 +62,7 @@ left_leg_inverse_kinematic:
 right_leg_inverse_kinematic:
   ros__parameters:
     target_topic: /ambula/right_foot_target
-    cmd_topic: /ambula/right_leg_joint_cmd
+    cmd_topic: /cmd_joint/right
     print_deg: true
 
     waist_offset_deg: 0.0
@@ -56,38 +83,44 @@ left_leg_joint_smoother:
   ros__parameters:
     state_topic: /joint_states/hardware
     target_topic: /ambula/left_leg_joint_cmd
-    out_topic: /ambula/left_leg_joint_cmd/smoothed
-    joint_names: [left_hip, left_knee]
+    out_topic: /cmd_joint/left
+    joint_names: [left_waist, left_hip, left_knee]
 
     profile: s_curve       # rectangle | trapezoid | s_curve
 
-    v_max: [5.0, 5.0]      # rad/s
-    a_max: [10.0, 10.0]    # rad/s^2
-    j_max: [100.0, 100.0]  # rad/s^3 (ใช้เฉพาะ s_curve)
+    v_max: [4.0, 4.0, 4.0]      # rad/s
+    a_max: [10.0, 10.0, 10.0]    # rad/s^2
+    j_max: [100.0, 100.0, 100.0]  # rad/s^3 (ใช้เฉพาะ s_curve)
 
     publish_rate: 200.0
     dt_profile: 0.002
+
+    min_T: 0.15
+    use_target_velocity_if_provided: false
 
 right_leg_joint_smoother:
   ros__parameters:
     state_topic: /joint_states/hardware
     target_topic: /ambula/right_leg_joint_cmd
-    out_topic: /ambula/right_leg_joint_cmd/smoothed
-    joint_names: [right_hip, right_knee]
+    out_topic: /cmd_joint/right
+    joint_names: [right_waist, right_hip, right_knee]
 
     profile: s_curve       # rectangle | trapezoid | s_curve
 
-    v_max: [5.0, 5.0]      # rad/s
-    a_max: [10.0, 10.0]    # rad/s^2
-    j_max: [100.0, 100.0]  # rad/s^3 (ใช้เฉพาะ s_curve)
+    v_max: [4.0, 4.0, 4.0]      # rad/s
+    a_max: [10.0, 10.0, 10.0]    # rad/s^2
+    j_max: [100.0, 100.0, 100.0]  # rad/s^3 (ใช้เฉพาะ s_curve)
 
     publish_rate: 200.0
     dt_profile: 0.002
 
+    min_T: 0.15
+    use_target_velocity_if_provided: false
+
 
 convert_to_left_motor:
   ros__parameters:
-    joint_in_topic: /ambula/right_leg_joint_cmd
+    joint_in_topic: /ambula/right_leg_joint_cmd/smoothed
     motor_out_topic: /cmd_joint/left
     print_debug: true
 
@@ -99,19 +132,19 @@ convert_to_left_motor:
     
     hip:
       pos_scale: 0.314159265
-      offset_deg: 70.0
+      offset_deg: 65.08
       flip: true
       direction: -1
     
     knee:
       pos_scale: 0.628318531
-      offset_deg: 150.0
+      offset_deg: 145.0
       flip: false
       direction: -1
 
 convert_to_right_motor:
   ros__parameters:
-    joint_in_topic: /ambula/right_leg_joint_cmd
+    joint_in_topic: /ambula/right_leg_joint_cmd/smoothed
     motor_out_topic: /cmd_joint/right
     print_debug: true
 
@@ -123,12 +156,12 @@ convert_to_right_motor:
     
     hip:
       pos_scale: 0.314159265
-      offset_deg: 71.5
+      offset_deg: 65.88
       flip: false
       direction: -1
     
     knee:
       pos_scale: 0.628318531
-      offset_deg: 137.0
+      offset_deg: 145.0
       flip: true
       direction: -1

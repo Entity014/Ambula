@@ -36,14 +36,16 @@
 #define LED_CH 4
 
 #define LED_PIN 13
+#define INTERRUPT_PIN 40
+#define RESET_PIN 33
 #define ESTOP_PIN 9
 #define PAYLOAD_PIN 26
 #define PAYLOAD_PULSE_MS 120
 
 #define N_JOINTS 8
 const char *JOINT_NAMES[N_JOINTS] = {
-    "left_waist", "left_hip", "left_knee", "left_wheel",
-    "right_waist", "right_hip", "right_knee", "right_wheel"};
+    "left_waist_joint", "left_hip_joint", "left_knee_joint", "left_wheel_joint",
+    "right_waist_joint", "right_hip_joint", "right_knee_joint", "right_wheel_joint"};
 
 #define ODRV_RIGHT_HIP_ID 0   // Right Hip [0]
 #define ODRV_LEFT_HIP_ID 2    // Left Hip [2]

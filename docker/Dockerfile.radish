@@ -69,8 +69,11 @@ RUN apt-get update && apt-get install -y \
 WORKDIR /home
 
 # Python dependencies
-RUN pip3 install --no-cache-dir --break-system-packages --ignore-installed sympy \
-    transforms3d pyproj matplotlib evdev pandas "numpy<2" scipy onnxruntime
+RUN python3 -m pip install --no-cache-dir --break-system-packages --ignore-installed \
+    "numpy<2" \
+    "scipy==1.11.4" --only-binary=scipy \
+    osqp qdldl \
+    sympy transforms3d pyproj matplotlib evdev pandas onnxruntime pin
 
 # Set CycloneDDS
 ENV RMW_IMPLEMENTATION=rmw_cyclonedds_cpp

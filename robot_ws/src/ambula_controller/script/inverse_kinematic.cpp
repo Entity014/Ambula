@@ -2,12 +2,24 @@
 #include <cmath>
 #include <algorithm>
 #include <sstream>
+#include <stdexcept>
 
 #include "rclcpp/rclcpp.hpp"
 #include "geometry_msgs/msg/point.hpp"
+#include "geometry_msgs/msg/twist.hpp"
 
 static inline double deg2rad(double deg) { return deg * M_PI / 180.0; }
 static inline double rad2deg(double rad) { return rad * 180.0 / M_PI; }
+
+// wrap angle to (-pi, pi]
+static inline double wrapToPi(double a)
+{
+    // same spirit as: Mod(a+pi, 2*pi)-pi
+    a = std::fmod(a + M_PI, 2.0 * M_PI);
+    if (a < 0.0)
+        a += 2.0 * M_PI;
+    return a - M_PI;
+}
 
 class RRLegInverseKinematics : public rclcpp::Node
 {
@@ -34,7 +46,7 @@ public:
         this->declare_parameter<double>("L2", 0.30);
         this->declare_parameter<double>("L3", 0.075);
 
-        // ---- elbow mode ----
+        // ---- kept for compatibility (but we will force elbow=-1 policy below) ----
         this->declare_parameter<std::string>("elbow", "down");
 
         // ---- debug ----
@@ -81,44 +93,56 @@ private:
         double q3;
     };
 
+    // ---- IK exactly following your Sympy "one-solution: q1b + elbow=-1" ----
     QUsed solve_ik_used(double xd, double yd, double zd)
     {
-        // --- p_des - h ---
-        const double dx = xd - hx_;
-        const double dy = yd - hy_;
-        const double dz = zd - hz_;
+        // Sympy symbols mapping:
+        // s = y - hy
+        // t = z - hz
+        const double s = yd - hy_;
+        const double t = zd - hz_;
+        const double r = std::sqrt(s * s + t * t); // |U|
 
-        // --- after align inverse: pA = R_align^T (p_des - h),  R_align = Ry(pi/2)
-        // xA = -dz, yA = dy, zA = dx
-        const double xA = -dz;
-        const double yA = dy;
-        const double zA = dx;
+        // q1a = atan2(s, -t)
+        // q1b = q1a + pi
+        double q1 = std::atan2(s, -t) + M_PI;
+        q1 = wrapToPi(q1);
 
-        // --- yaw (updated): q1 = atan2(yA, -xA) = atan2(dy, dz)
-        const double q1 = std::atan2(dy, dz);
+        // dx = hx - x
+        const double dx = hx_ - xd;
 
-        // --- planar quantities ---
-        const double r_xy = std::sqrt(xA * xA + yA * yA); // r = sqrt(dy^2 + dz^2)
-        const double r2 = r_xy * r_xy + zA * zA;          // dx^2 + dy^2 + dz^2
-        const double r = std::sqrt(r2);                   // distance to target in the 2-link plane
+        // choose ONLY q1b branch: U = -r
+        const double u = -r;
+        const double v = dx;
 
-        // reachability
+        // D = (u^2+v^2 - L1^2 - L23^2) / (2 L1 L23)
+        const double u2v2 = u * u + v * v;
         const double r_min = std::fabs(L1_ - L23_);
         const double r_max = L1_ + L23_;
-        if (r > r_max || r < r_min)
-            throw std::runtime_error("Target out of reach");
+        const double dist = std::sqrt(u2v2);
 
-        // cosine law
-        double c3 = (r2 - L1_ * L1_ - L23_ * L23_) / (2.0 * L1_ * L23_);
-        c3 = std::clamp(c3, -1.0, 1.0);
+        if (dist > r_max + 1e-9 || dist < r_min - 1e-9)
+        {
+            std::ostringstream ss;
+            ss << "Target out of reach: dist=" << dist
+               << " (min=" << r_min << ", max=" << r_max << ")";
+            throw std::runtime_error(ss.str());
+        }
 
-        const double s3_mag = std::sqrt(std::max(0.0, 1.0 - c3 * c3));
-        const double s3 = (elbow_ == "down") ? -s3_mag : s3_mag;
+        double D = (u2v2 - L1_ * L1_ - L23_ * L23_) / (2.0 * L1_ * L23_);
+        D = std::clamp(D, -1.0, 1.0);
 
-        const double q3 = std::atan2(s3, c3);
+        // elbow = -1 => s3 = -sqrt(1-D^2)
+        const double s3 = -std::sqrt(std::max(0.0, 1.0 - D * D));
 
-        // updated q2: q2 = -(atan2(zA, r_xy) - atan2(L23*s3, L1 + L23*c3))
-        const double q2 = -std::atan2(zA, r_xy) + std::atan2(L23_ * s3, L1_ + L23_ * c3);
+        // q3 = atan2(s3, D)
+        double q3 = std::atan2(s3, D);
+
+        // q2 = atan2(v,u) - atan2(L23*s3, L1 + L23*D)
+        double q2 = std::atan2(v, u) - std::atan2(L23_ * s3, L1_ + L23_ * D);
+
+        q2 = wrapToPi(q2);
+        q3 = wrapToPi(q3);
 
         return {q1, q2, q3};
     }
@@ -127,12 +151,12 @@ private:
     {
         try
         {
-            QUsed q = solve_ik_used(msg->x, msg->y, msg->z);
+            const QUsed q = solve_ik_used(msg->x, msg->y, msg->z);
 
             geometry_msgs::msg::Point out;
-            out.x = q.q1 - waist_off_;
-            out.y = q.q2 - hip_off_;
-            out.z = q.q3 - knee_off_;
+            out.x = wrapToPi(q.q1 - waist_off_);
+            out.y = wrapToPi(q.q2 - hip_off_);
+            out.z = wrapToPi(q.q3 - knee_off_);
 
             pub_->publish(out);
 

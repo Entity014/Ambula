@@ -22,6 +22,7 @@ set(THIS_PACKAGE_DEPENDS
 install(DIRECTORY
   config
   urdf
+  meshs
   DESTINATION share/${PROJECT_NAME}/
 )
 

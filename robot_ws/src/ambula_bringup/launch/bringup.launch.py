@@ -51,7 +51,7 @@ def generate_launch_description():
     )
 
     ld = LaunchDescription()
-    # ld.add_action(description_launch)
+    ld.add_action(description_launch)
     # ld.add_action(leg_kinematic_launch)
     ld.add_action(state_estimation_launch)
     ld.add_action(balance_control_launch)
