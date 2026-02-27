@@ -10,7 +10,7 @@ from sensor_msgs.msg import JointState, Imu
 from nav_msgs.msg import Odometry
 from geometry_msgs.msg import Twist
 
-# Core Library ของคุณ (ต้องเป็นเวอร์ชันที่รองรับ tau_override ใน solver)
+# Core Library ของคุณ (ต้องเป็นเวอร์ชันที่รองรับ knee spring params ใน solver)
 from ambula_controller.wbc_core import (
     load_model,
     solve_wbc_idqp_full_dynamic,
@@ -82,10 +82,20 @@ class AmbulaWBCNode(Node):
         self.declare_parameter('friction_mu', 0.6)
 
         # NEW: per-joint torque limits
-        # 1) แบบ list ตามลำดับ actuated joints (len ต้องเท่ากับ na)
         self.declare_parameter('tau_limits', rclpy.Parameter.Type.DOUBLE_ARRAY)
-        # 2) แบบ map ตามชื่อ joint (string)
         self.declare_parameter('tau_override', "")     # "joint:Nm,joint:Nm,..."
+
+        # ========================================================
+        # NEW: Knee Spiral Torsion Spring (parallel at knee joints)
+        # tau_spring = sign * ( -k*(q-q0) - b*qdot )
+        # units: k [Nm/rad], b [Nms/rad], q0 [rad]
+        # ========================================================
+        self.declare_parameter('knee_spring_k', 0.0)            # same for L/R (ง่ายสุด)
+        self.declare_parameter('knee_spring_b', 0.0)
+        self.declare_parameter('knee_spring_q0_left', 0.0)
+        self.declare_parameter('knee_spring_q0_right', 0.0)
+        self.declare_parameter('knee_spring_sign_left', 1.0)   # flip direction if needed
+        self.declare_parameter('knee_spring_sign_right', 1.0)
 
         # ========================================================
         # 2) Load Model
@@ -169,9 +179,9 @@ class AmbulaWBCNode(Node):
     # ========================================================
     def imu_callback(self, msg: Imu):
         # Free-flyer quaternion (x,y,z,w)
-        self.q_current[3:7] = [-msg.orientation.x, -msg.orientation.y, msg.orientation.z, msg.orientation.w]
+        self.q_current[3:7] = [-msg.orientation.x, msg.orientation.y, msg.orientation.z, msg.orientation.w]
         # Base angular velocity in u[3:6] (ตาม convention ที่คุณใช้อยู่)
-        self.u_current[3:6] = [-msg.angular_velocity.x, -msg.angular_velocity.y, msg.angular_velocity.z]
+        self.u_current[3:6] = [-msg.angular_velocity.x, msg.angular_velocity.y, msg.angular_velocity.z]
         self.imu_ready = True
 
     def odom_callback(self, msg: Odometry):
@@ -293,6 +303,14 @@ class AmbulaWBCNode(Node):
         # 3) Per-joint torque limits dict
         tau_override = self._build_tau_override_dict()
 
+        # 4) Knee spring params
+        knee_k = float(self.get_parameter('knee_spring_k').value)
+        knee_b = float(self.get_parameter('knee_spring_b').value)
+        knee_q0_L = float(self.get_parameter('knee_spring_q0_left').value)
+        knee_q0_R = float(self.get_parameter('knee_spring_q0_right').value)
+        knee_sgn_L = float(self.get_parameter('knee_spring_sign_left').value)
+        knee_sgn_R = float(self.get_parameter('knee_spring_sign_right').value)
+
         try:
             out = solve_wbc_idqp_full_dynamic(
                 model=self.model,
@@ -306,15 +324,24 @@ class AmbulaWBCNode(Node):
                 yaw_ref=self.yaw_ref,
                 v_ref=self.v_ref,
                 q_ref_actuated=self.q_ref_actuated,
+                alpha_bg=20.0,
 
-                # NEW: ส่ง per-joint max torque เข้าไป (ถ้า core รองรับ)
+                # torque limits
                 tau_override=tau_override,
+
+                # knee spiral torsion spring (parallel)
+                knee_spring_k=knee_k,
+                knee_spring_b=knee_b,
+                knee_spring_q0_left=knee_q0_L,
+                knee_spring_q0_right=knee_q0_R,
+                knee_spring_sign_left=knee_sgn_L,
+                knee_spring_sign_right=knee_sgn_R,
 
                 # weights/gains/limits
                 **params
             )
 
-            # 4) Publish command (สำคัญ: name/effort/position ต้อง "ตรง order เดียวกัน" = actuated order)
+            # 5) Publish command (name/effort/position ต้องตรง order เดียวกัน)
             cmd = JointState()
             cmd.header.stamp = self.get_clock().now().to_msg()
             cmd.name = self.actuated_names

@@ -73,6 +73,6 @@ const char *JOINT_NAMES[N_JOINTS] = {
 #define VEL_GAIN_LEFT_KNEE 0.005f
 #define VEL_INTEGRAL_GAIN_LEFT_KNEE 0.0f
 
-#define TAU_MAX 2.0f
+#define TAU_MAX 1.0f
 
 #endif

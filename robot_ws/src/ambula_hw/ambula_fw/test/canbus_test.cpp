@@ -110,25 +110,25 @@ void setup()
     Serial.println(vbus.Bus_Current);
 
     Serial.println("Enabling closed loop control...");
-    while (odrv0_user_data.last_heartbeat.Axis_State != ODriveAxisState::AXIS_STATE_CLOSED_LOOP_CONTROL)
-    {
-        odrv0.clearErrors();
-        delay(1);
-        odrv0.setState(ODriveAxisState::AXIS_STATE_CLOSED_LOOP_CONTROL);
+    // while (odrv0_user_data.last_heartbeat.Axis_State != ODriveAxisState::AXIS_STATE_CLOSED_LOOP_CONTROL)
+    // {
+    //     odrv0.clearErrors();
+    //     delay(1);
+    //     odrv0.setState(ODriveAxisState::AXIS_STATE_CLOSED_LOOP_CONTROL);
 
-        // Pump events for 150ms. This delay is needed for two reasons;
-        // 1. If there is an error condition, such as missing DC power, the ODrive might
-        //    briefly attempt to enter CLOSED_LOOP_CONTROL state, so we can't rely
-        //    on the first heartbeat response, so we want to receive at least two
-        //    heartbeats (100ms default interval).
-        // 2. If the bus is congested, the setState command won't get through
-        //    immediately but can be delayed.
-        for (int i = 0; i < 15; ++i)
-        {
-            delay(10);
-            pumpEvents(can_intf);
-        }
-    }
+    //     // Pump events for 150ms. This delay is needed for two reasons;
+    //     // 1. If there is an error condition, such as missing DC power, the ODrive might
+    //     //    briefly attempt to enter CLOSED_LOOP_CONTROL state, so we can't rely
+    //     //    on the first heartbeat response, so we want to receive at least two
+    //     //    heartbeats (100ms default interval).
+    //     // 2. If the bus is congested, the setState command won't get through
+    //     //    immediately but can be delayed.
+    //     for (int i = 0; i < 15; ++i)
+    //     {
+    //         delay(10);
+    //         pumpEvents(can_intf);
+    //     }
+    // }
 
     Serial.println("ODrive running!");
 }
@@ -138,7 +138,7 @@ void loop()
     // (ถ้าอยากให้ปลอดภัย ใส่ pumpEvents ไว้ด้วย แม้ Teensy จะใช้ interrupt ก็ตาม)
     pumpEvents(can_intf);
 
-    odrv0.setTorque(0.1f); // ปล่อยให้มอเตอร์ฟรี
+    // odrv0.setTorque(0.1f); // ปล่อยให้มอเตอร์ฟรี
 
     // วิธีที่ 2: poll ขอค่าเอง (ใช้ได้ทันทีแม้ยังไม่เปิด feedback messages)
     Get_Encoder_Estimates_msg_t fb2;

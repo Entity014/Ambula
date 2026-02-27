@@ -10,25 +10,25 @@ wbc_node:
     # WBC Weights (Priority Tuning)
     # ======================================================
     weight_height: 5.0
-    weight_roll: 20.0
-    weight_lqr_pitch: 30.0
+    weight_roll: 0.0
+    weight_lqr_pitch: 5.0
     weight_yaw: 0.0
-    weight_posture: 1.0
+    weight_posture: 0.5
 
     # ======================================================
     # PD Gains
     # ======================================================
-    kp_z: 100.0
-    kd_z: 20.0
+    kp_z: 5.0
+    kd_z: 2.0
 
-    kp_roll: 120.0
+    kp_roll: 60.0
     kd_roll: 40.0
 
     kp_yaw: 50.0
     kd_yaw: 10.0
 
-    kp_posture: 1.0
-    kd_posture: 0.5
+    kp_posture: 40.0
+    kd_posture: 4.0
 
     # ======================================================
     # Hardware / Contact Constraints
@@ -37,7 +37,7 @@ wbc_node:
     friction_mu: 0.6
 
     # ======================================================
-    # NEW: Per-joint torque limits (เลือกใช้ "อย่างใดอย่างหนึ่ง")
+    # Per-joint torque limits (เลือกใช้ "อย่างใดอย่างหนึ่ง")
     #
     # (A) tau_limits: list ตามลำดับ actuated joints ที่ node print ตอน start:
     #     "Actuated joints (na=...): [....]"
@@ -50,7 +50,38 @@ wbc_node:
     # ---------- (A) แบบ list ตามลำดับ actuated ----------
     # ตัวอย่างสำหรับ Ambula (สมมติ order: left_waist,left_hip,left_knee,left_wheel,right_waist,right_hip,right_knee,right_wheel)
     # ถ้า order ของคุณต่าง ให้แก้ตาม log ที่ node พิมพ์
-    tau_limits: [20.0, 40.0, 10.0, 0.1, 20.0, 40.0, 10.0, 0.1]
+    tau_limits: [20.0, 40.0, 20.0, 1.0, 20.0, 40.0, 20.0, 1.0]
 
-    # ถ้าเปิดใช้แบบนี้ แนะนำให้ตั้ง tau_limits เป็น [] หรือคอมเมนต์ทิ้ง
-    # tau_override: "left_waist_joint:20,left_hip_joint:60,left_knee_joint:45,left_wheel_joint:20,right_waist_joint:20,right_hip_joint:60,right_knee_joint:45,right_wheel_joint:20"
+    # ---------- (B) แบบ map-string ----------
+    # ถ้าจะใช้แบบนี้ แนะนำให้คอมเมนต์ tau_limits หรือใส่ [] เพื่อไม่ให้สับสน
+    # tau_limits: []
+    # tau_override: "left_waist_joint:20,left_hip_joint:40,left_knee_joint:20,left_wheel_joint:5,right_waist_joint:20,right_hip_joint:40,right_knee_joint:20,right_wheel_joint:5"
+
+    # ======================================================
+    # Knee Spiral Torsion Spring (parallel at knee joints)
+    #
+    # โมเดล: tau_spring = sign * ( -k*(q-q0) - b*qdot )
+    #  - k หน่วย Nm/rad
+    #  - b หน่วย Nms/rad  (ใส่เพื่อกันเด้ง/ออสซิลเลชัน)
+    #  - q0 คือมุมพัก (rad) / preload reference
+    #
+    # IMPORTANT:
+    #  - ถ้าตั้ง q0_left/right = knee angle ปัจจุบัน และ qdot ~ 0 => tau_spring ~ 0 (ไม่มี preload)
+    #  - ถ้าทิศผิด (สปริงช่วยงอแทนช่วยเหยียด) ให้สลับ sign เป็น -1.0
+    # ======================================================
+
+    # ปิดสปริง (ค่าเริ่ม) -> ตั้ง k=0
+    knee_spring_k: 1.0
+    knee_spring_b: 0.0
+    knee_spring_q0_left: -1.57
+    knee_spring_q0_right: -1.57
+    knee_spring_sign_left: 1.0
+    knee_spring_sign_right: 1.0
+
+    # ตัวอย่างเปิดสปริงแบบมี preload (ลองทีละนิด)
+    # knee_spring_k: 15.0
+    # knee_spring_b: 0.8
+    # knee_spring_q0_left: 2.64     # q0 = q + 0.20 rad -> จะเริ่มมีแรงสปริงทันที
+    # knee_spring_q0_right: 2.64
+    # knee_spring_sign_left: 1.0
+    # knee_spring_sign_right: 1.0

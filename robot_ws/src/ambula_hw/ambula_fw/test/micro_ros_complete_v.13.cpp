@@ -567,6 +567,8 @@ void changeMode()
             wheels_set_velocity_mode();
             break;
         case OPERATING:
+            all_odrives_closed();
+            wheels_set_torque_mode();
             target_joint_pos[J_LEFT_HIP] = joint_state_msg.position.data[J_LEFT_HIP];
             target_joint_pos[J_LEFT_KNEE] = joint_state_msg.position.data[J_LEFT_KNEE];
             target_joint_pos[J_RIGHT_HIP] = joint_state_msg.position.data[J_RIGHT_HIP];
@@ -575,8 +577,6 @@ void changeMode()
             {
                 target_joint_eff[i] = 0.0f;
             }
-            all_odrives_closed();
-            wheels_set_torque_mode();
             break;
         default:
             all_odrives_idle();
@@ -611,8 +611,8 @@ void moveBase()
     }
     else if (robot_state == OPERATING)
     {
-        odrv_left_wheel.setTorque(clampf(target_joint_eff[J_LEFT_WHEEL], -TAU_MAX, TAU_MAX));
-        odrv_right_wheel.setTorque(clampf(-target_joint_eff[J_RIGHT_WHEEL], -TAU_MAX, TAU_MAX));
+        odrv_left_wheel.setTorque(-target_joint_eff[J_LEFT_WHEEL]);
+        odrv_right_wheel.setTorque(target_joint_eff[J_RIGHT_WHEEL]);
 
         float left_hip_turns = (target_joint_pos[J_LEFT_HIP] - maps[0].pos_offset_rad) / maps[0].pos_scale;
         if (maps[0].flip)
