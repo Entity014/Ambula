@@ -33,6 +33,7 @@ def generate_launch_description():
             # topic/frame
             "use_mag": False,          # ถ้ามี mag ค่อยเปิด
             "publish_tf": False,       # ถ้าใช้ EKF/robot_localization แนะนำปิด
+            "stateless": True,        # ถ้า true จะไม่เก็บ state เดิมเลย (ไม่แนะนำ)
             "world_frame": world_frame,  # บางเวอร์ชันใช้ fixed_frame/world_frame
             "fixed_frame": world_frame,
             # tuning
@@ -81,7 +82,7 @@ def generate_launch_description():
     )
 
     return LaunchDescription([
-        DeclareLaunchArgument("use_madgwick", default_value="false"),
+        DeclareLaunchArgument("use_madgwick", default_value="true"),
         DeclareLaunchArgument("use_complementary", default_value="false"),
 
         DeclareLaunchArgument("imu_raw_topic", default_value="/imu/data_raw"),
@@ -94,6 +95,6 @@ def generate_launch_description():
 
         madgwick_node,
         complementary_node,
-        node_orientation_to_euler_raw,
+        # node_orientation_to_euler_raw,
         # node_orientation_to_euler_complementary,
     ])

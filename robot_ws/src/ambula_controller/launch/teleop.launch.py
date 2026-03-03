@@ -26,9 +26,9 @@ def generate_launch_description():
         output="screen",
     )
     node_teleop_twist = Node(
-        package="teleop_twist_joy",
-        executable="teleop_node",
-        name="teleop_twist_joy",
+        package="ambula_controller",
+        executable="teleop_node.py",
+        name="teleop_node",
         parameters=[{teleop_config_path}],
         output="screen",
     )

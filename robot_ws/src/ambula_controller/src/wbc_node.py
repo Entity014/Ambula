@@ -5,362 +5,528 @@ import rclpy
 from rclpy.node import Node
 import numpy as np
 import pinocchio as pin
+import inspect
 
 from sensor_msgs.msg import JointState, Imu
 from nav_msgs.msg import Odometry
 from geometry_msgs.msg import Twist
 
-# Core Library ของคุณ (ต้องเป็นเวอร์ชันที่รองรับ knee spring params ใน solver)
 from ambula_controller.wbc_core import (
     load_model,
-    solve_wbc_idqp_full_dynamic,
-    LQRLookupTable,
     build_actuation_selection,
-    wrap_pi
+    IK_CONTROLLED_JOINTS,
 )
+
+try:
+    from ambula_controller.wbc_core import solve_wbc_idqp_full_dynamic_leg_only as SOLVE_WBC_FN
+except Exception:
+    from ambula_controller.wbc_core import solve_wbc_idqp_full_dynamic as SOLVE_WBC_FN
+
 from ambula_controller.wbc_kinematic import AmbulaLegIK
 
 
+# ======================================================
+# IMU Geometry Helpers
+# ======================================================
+
+def get_quaternion_from_gravity(q_raw_xyzw):
+    """
+    สร้าง Quaternion ที่ Align เฉพาะแกน Z (Gravity)
+    เพื่อป้องกันแกน X/Y หมุน (Yaw Drift) ขณะหุ่นเอียง
+    """
+    x, y, z, w = q_raw_xyzw
+
+    # Gravity vector in body frame (ตามสูตรเดิมของคุณ)
+    gx = 2.0 * (x * z - w * y)
+    gy = 2.0 * (w * x + y * z)
+    gz = w * w - x * x - y * y + z * z
+
+    n = np.sqrt(gx**2 + gy**2 + gz**2)
+    if n < 1e-9:
+        return np.array([0.0, 0.0, 0.0, 1.0], dtype=float)
+
+    # ต้องการ "ขึ้น" (up) ใน frame ของหุ่น
+    up_body = np.array([-gx/n, -gy/n, -gz/n], dtype=float)
+
+    # สร้าง quaternion หมุนจาก world_z ไป up_body (ไม่มี yaw)
+    world_z = np.array([0.0, 0.0, -1.0], dtype=float)
+    q_aligned = pin.Quaternion.FromTwoVectors(world_z, up_body)
+    return np.array([q_aligned.x, q_aligned.y, q_aligned.z, q_aligned.w], dtype=float)
+
+
+def _quat_normalize_xyzw(q):
+    q = np.asarray(q, dtype=float).reshape(4)
+    n = float(np.linalg.norm(q))
+    if n < 1e-12:
+        return np.array([0.0, 0.0, 0.0, 1.0], dtype=float)
+    return q / n
+
+
+def _smoothstep01(x: float) -> float:
+    x = float(np.clip(x, 0.0, 1.0))
+    return x * x * (3.0 - 2.0 * x)
+
+
 def _parse_tau_override_string(s: str):
-    """
-    รูปแบบ: "left_hip_joint:60,right_hip_joint:60,left_knee_joint:45,..."
-    คืนค่า dict {name: float}
-    """
     out = {}
     if not s:
         return out
-    for item in s.split(","):
+    for item in str(s).split(","):
         item = item.strip()
-        if not item:
-            continue
-        if ":" not in item:
+        if not item or ":" not in item:
             continue
         k, v = item.split(":", 1)
-        k = k.strip()
-        v = v.strip()
-        if not k:
-            continue
         try:
-            out[k] = float(v)
+            out[k.strip()] = float(v.strip())
         except ValueError:
             pass
     return out
 
 
+# ======================================================
+# Main WBC Node
+# ======================================================
+
 class AmbulaWBCNode(Node):
     def __init__(self):
         super().__init__('ambula_wbc_node')
 
-        # ========================================================
-        # 1) Parameters
-        # ========================================================
-        self.declare_parameter(
-            'urdf_path',
-            '/home/xero/Ambula/robot_ws/src/ambula_simulation/ambula_description/urdf/ambula_bot_v3/ambula.urdf'
-        )
-        self.declare_parameter('control_rate_hz', 400.0)
+        # ======================================================
+        # Parameters
+        # ======================================================
+        self.declare_parameter('urdf_path', '/home/robot_ws/src/ambula_simulation/ambula_description/urdf/ambula_bot_v3/ambula.urdf')
+        self.declare_parameter('control_rate_hz', 200.0)
+        self.declare_parameter('publish_all_joints', True)
+        self.declare_parameter('non_actuated_effort_mode', 'zero')
 
-        # Weights
-        self.declare_parameter('weight_height', 80.0)
-        self.declare_parameter('weight_roll', 80.0)
-        self.declare_parameter('weight_lqr_pitch', 120.0)
-        self.declare_parameter('weight_yaw', 10.0)
-        self.declare_parameter('weight_posture', 2.0)
+        # --- NEW: State source ---
+        # state_source:
+        #   - "ekf": ใช้ Odometry ที่ฟิวส์แล้ว (เช่น /odometry/filtered) -> เอา pose.orientation + twist.angular มาใช้ด้วย
+        #   - "raw": ใช้ IMU raw (gravity-align) + odom (position + linear vel)
+        self.declare_parameter('state_source', 'ekf')  # 'ekf' or 'raw'
+        self.declare_parameter('odom_topic', '/odom')
+        self.declare_parameter('imu_topic', '/imu/data_raw')
 
-        # PD gains
-        self.declare_parameter('kp_z', 200.0)
-        self.declare_parameter('kd_z', 40.0)
-        self.declare_parameter('kp_roll', 200.0)
-        self.declare_parameter('kd_roll', 40.0)
-        self.declare_parameter('kp_yaw', 50.0)
-        self.declare_parameter('kd_yaw', 10.0)
-        self.declare_parameter('kp_posture', 50.0)
-        self.declare_parameter('kd_posture', 10.0)
+        # ถ้าใช้ raw gravity-align แล้วอยาก “ไม่เอา gyro z” (ลด inconsistency yaw)
+        self.declare_parameter('raw_zero_gyro_z', False)
 
-        # Limits
-        self.declare_parameter('tau_limit', 40.0)      # fallback
-        self.declare_parameter('friction_mu', 0.6)
+        # WBC Weights / Gains
+        self.declare_parameter('weight_height',  60.0)
+        self.declare_parameter('weight_roll',     0.0)
+        self.declare_parameter('weight_posture',  5.0)
 
-        # NEW: per-joint torque limits
-        self.declare_parameter('tau_limits', rclpy.Parameter.Type.DOUBLE_ARRAY)
-        self.declare_parameter('tau_override', "")     # "joint:Nm,joint:Nm,..."
+        self.declare_parameter('kp_z',    120.0)
+        self.declare_parameter('kd_z',      8.0)
+        self.declare_parameter('kp_roll',  30.0)
+        self.declare_parameter('kd_roll',  15.0)
 
-        # ========================================================
-        # NEW: Knee Spiral Torsion Spring (parallel at knee joints)
-        # tau_spring = sign * ( -k*(q-q0) - b*qdot )
-        # units: k [Nm/rad], b [Nms/rad], q0 [rad]
-        # ========================================================
-        self.declare_parameter('knee_spring_k', 0.0)            # same for L/R (ง่ายสุด)
-        self.declare_parameter('knee_spring_b', 0.0)
-        self.declare_parameter('knee_spring_q0_left', 0.0)
-        self.declare_parameter('knee_spring_q0_right', 0.0)
-        self.declare_parameter('knee_spring_sign_left', 1.0)   # flip direction if needed
+        self.declare_parameter('kp_hip',  300.0)
+        self.declare_parameter('kd_hip',   30.0)
+        self.declare_parameter('kp_knee',  50.0)
+        self.declare_parameter('kd_knee',  14.0)
+
+        # Hardware params
+        self.declare_parameter('tau_limit',     40.0)
+        self.declare_parameter('friction_mu',    0.6)
+        self.declare_parameter('tau_limits',     [])
+        self.declare_parameter('tau_override',   "")
+        self.declare_parameter('knee_tau_scale',  5.0)
+        self.declare_parameter('hip_tau_scale',   1.0)
+        self.declare_parameter('waist_tau_scale', 5.0)
+        self.declare_parameter('posture_qdd_clip', 200.0)
+
+        # Standup / Boost
+        self.declare_parameter('standup_enable', False)
+        self.declare_parameter('standup_height', 0.30)
+        self.declare_parameter('standup_duration', 1.2)
+
+        self.declare_parameter('height_boost_enable', True)
+        self.declare_parameter('height_boost_duration', 0.6)
+        self.declare_parameter('height_boost_kp_mult', 2.0)
+        self.declare_parameter('height_boost_w_mult',  2.0)
+        self.declare_parameter('height_boost_zdd_clip', 20.0)
+        self.declare_parameter('height_boost_knee_tau_scale', 1.0)
+        self.declare_parameter('height_boost_tau_override', "")
+
+        # Knee Spring
+        self.declare_parameter('knee_spring_k',          0.5)
+        self.declare_parameter('knee_spring_b',          0.3)
+        self.declare_parameter('knee_spring_q0_left',    1.57)
+        self.declare_parameter('knee_spring_q0_right',   1.57)
+        self.declare_parameter('knee_spring_sign_left',  1.0)
         self.declare_parameter('knee_spring_sign_right', 1.0)
 
-        # ========================================================
-        # 2) Load Model
-        # ========================================================
+        # Robustness
+        self.declare_parameter('w_roll_slack', 1e4)
+        self.declare_parameter('alpha_bg',     20.0)
+
+        # ======================================================
+        # Initialization
+        # ======================================================
         urdf_path = self.get_parameter('urdf_path').value
         self.rate_hz = float(self.get_parameter('control_rate_hz').value)
-        self.dt = 1.0 / self.rate_hz
+        self.dt = 1.0 / max(self.rate_hz, 1e-6)
+
+        self.state_source = str(self.get_parameter('state_source').value).strip().lower()
+        self.odom_topic = str(self.get_parameter('odom_topic').value)
+        self.imu_topic  = str(self.get_parameter('imu_topic').value)
 
         self.get_logger().info(f"Loading Model: {urdf_path}")
         self.model, self.data = load_model(urdf_path, use_free_flyer=True)
-
-        # LQR LUT + IK
-        self.lqr_table = LQRLookupTable(L_min=0.1, L_max=0.6, num_points=100, dt=self.dt)
         self.leg_ik = AmbulaLegIK(self.model)
 
-        # State
         self.q_current = pin.neutral(self.model)
         self.u_current = np.zeros(self.model.nv)
 
-        self.imu_ready = False
-        self.odom_ready = False
+        self.imu_ready   = (self.state_source == 'ekf')  # ekf mode ไม่ต้องรอ imu topic
+        self.odom_ready  = False
         self.joint_ready = False
 
-        # Targets
-        self.v_ref = 0.0
-        self.w_ref = 0.0
-        self.yaw_ref = 0.0
-        self.target_L = 0.25
-        self.target_X = 0.0
+        self.target_base_height = 0.18
+        self.current_z_ref = 0.18
+        self.target_X = -0.03
 
-        _, self.na = build_actuation_selection(self.model)
+        self._stand_t0 = None
+        self._stand_h0 = None
+        self._stand_done = False
+        self._boost_t0 = None
+
+        # Joint Mapping
+        self.all_joint_names = []
+        self.joint_info = {}
+        for jid in range(1, self.model.njoints):
+            j = self.model.joints[jid]
+            if j.nv == 1:
+                name = self.model.names[jid]
+                self.all_joint_names.append(name)
+                self.joint_info[name] = {"jid": jid, "iq": j.idx_q, "iv": j.idx_v, "nq": j.nq}
+
+        _, self.na, self.actuated_ivs, _ = build_actuation_selection(self.model, exclude_keywords=("wheel",))
         self.q_ref_actuated = np.zeros(self.na)
 
-        # ========================================================
-        # 2.1) Build ACTUATED JOINT LIST (สำคัญมาก: ทำให้ order ตรงกันหมด)
-        # ========================================================
-        self.actuated = []              # list of dicts: {name, jid, iq, iv, act_idx, nq}
-        self.act_name_to_act_idx = {}   # name -> act_idx
+        self.actuated = []
+        self.act_name_to_act_idx = {}
         act_idx = 0
         for jid in range(1, self.model.njoints):
             j = self.model.joints[jid]
             if j.nv != 1:
                 continue
             name = self.model.names[jid]
-            item = {
-                "name": name,
-                "jid": jid,
-                "iq": j.idx_q,
-                "iv": j.idx_v,
-                "nq": j.nq,
-                "act_idx": act_idx,
-            }
-            self.actuated.append(item)
+            if "wheel" in name.lower():
+                continue
+            self.actuated.append({
+                "name": name, "jid": jid, "iq": j.idx_q, "iv": j.idx_v, "nq": j.nq, "act_idx": act_idx
+            })
             self.act_name_to_act_idx[name] = act_idx
             act_idx += 1
 
-        if act_idx != self.na:
-            self.get_logger().warn(
-                f"Actuated joint count mismatch: built={act_idx} vs na={self.na}. "
-                "Check URDF / free-flyer / joint definitions."
-            )
-
         self.actuated_names = [a["name"] for a in self.actuated]
-        self.get_logger().info(f"Actuated joints (na={self.na}): {self.actuated_names}")
+        self.actuated_name_set = set(self.actuated_names)
+        self._seen_joint_states = set()
 
-        # ========================================================
-        # 3) Subscribers & Publishers
-        # ========================================================
-        self.sub_imu = self.create_subscription(Imu, '/imu/data_raw', self.imu_callback, 50)
-        self.sub_odom = self.create_subscription(Odometry, '/odom', self.odom_callback, 20)
+        self.solve_wbc = SOLVE_WBC_FN
+        self.solve_sig = inspect.signature(self.solve_wbc)
+
+        # ======================================================
+        # Pubs/Subs
+        # ======================================================
+        self.sub_odom = self.create_subscription(Odometry, self.odom_topic, self.odom_callback, 50)
+
+        # raw mode เท่านั้นถึง subscribe IMU
+        if self.state_source == 'raw':
+            self.sub_imu = self.create_subscription(Imu, self.imu_topic, self.imu_callback, 200)
+            self.get_logger().info(f"[WBC] state_source=raw | odom={self.odom_topic} imu={self.imu_topic}")
+        else:
+            self.sub_imu = None
+            self.get_logger().info(f"[WBC] state_source=ekf | odom={self.odom_topic} (IMU topic not used in WBC)")
+
         self.sub_cmd_vel = self.create_subscription(Twist, '/cmd_vel', self.cmd_vel_callback, 20)
         self.sub_joint_states = self.create_subscription(JointState, '/joint_states/hardware', self.joint_state_callback, 50)
 
         self.pub_joint_commands = self.create_publisher(JointState, '/cmd_joint', 10)
-
         self.timer = self.create_timer(self.dt, self.control_loop)
-        self.get_logger().info(f"WBC Node running at {self.rate_hz}Hz with Fast IMU Path.")
 
-    # ========================================================
-    # Callbacks
-    # ========================================================
+    # ======================================================
+    # CALLBACKS
+    # ======================================================
     def imu_callback(self, msg: Imu):
-        # Free-flyer quaternion (x,y,z,w)
-        self.q_current[3:7] = [-msg.orientation.x, msg.orientation.y, msg.orientation.z, msg.orientation.w]
-        # Base angular velocity in u[3:6] (ตาม convention ที่คุณใช้อยู่)
-        self.u_current[3:6] = [-msg.angular_velocity.x, msg.angular_velocity.y, msg.angular_velocity.z]
+        # ใช้เฉพาะ raw mode
+        q_raw = [msg.orientation.x, msg.orientation.y, msg.orientation.z, msg.orientation.w]
+        q_aligned = get_quaternion_from_gravity(q_raw)
+        self.q_current[3:7] = _quat_normalize_xyzw(q_aligned)
+
+        wz = msg.angular_velocity.z
+        if bool(self.get_parameter('raw_zero_gyro_z').value):
+            wz = 0.0
+
+        self.u_current[3:6] = [
+            msg.angular_velocity.x,
+            msg.angular_velocity.y,
+            wz
+        ]
         self.imu_ready = True
 
     def odom_callback(self, msg: Odometry):
-        self.q_current[0:2] = [msg.pose.pose.position.x, msg.pose.pose.position.y]
-        self.u_current[0:3] = [msg.twist.twist.linear.x, msg.twist.twist.linear.y, msg.twist.twist.linear.z]
+        # position
+        p = msg.pose.pose.position
+        self.q_current[0:3] = [p.x, p.y, p.z]
+
+        # linear vel
+        v = msg.twist.twist.linear
+        self.u_current[0:3] = [v.x, v.y, v.z]
+
+        if self.state_source == 'ekf':
+            # orientation from fused odom (EKF output)
+            oq = msg.pose.pose.orientation
+            self.q_current[3:7] = _quat_normalize_xyzw([oq.x, oq.y, oq.z, oq.w])
+
+            # angular velocity from fused odom (EKF output)
+            w = msg.twist.twist.angular
+            self.u_current[3:6] = [w.x, w.y, w.z]
+
+            # ekf mode: ไม่ต้องรอ imu callback
+            self.imu_ready = True
+
         self.odom_ready = True
 
     def cmd_vel_callback(self, msg: Twist):
-        self.v_ref = float(msg.linear.x)
-        self.w_ref = float(msg.angular.z)
-
+        # ใช้ linear.z เป็น “command height” ตามเดิมของคุณ
         if abs(msg.linear.z) > 0.05:
-            self.target_L = float(np.clip(
-                msg.linear.z,
-                self.leg_ik.L_MIN_REACHABLE,
-                self.leg_ik.L_MAX_REACHABLE
-            ))
+            new_h = float(np.clip(msg.linear.z, self.leg_ik.L_MIN_REACHABLE, self.leg_ik.L_MAX_REACHABLE))
+            if new_h > self.target_base_height + 1e-4:
+                self._boost_t0 = self.get_clock().now()
+            self.target_base_height = new_h
 
     def joint_state_callback(self, msg: JointState):
-        """
-        อัปเดตเฉพาะ actuated joints ในลำดับ/ชื่อที่ตรงกับโมเดล
-        NOTE: ถ้า joint เป็น continuous ใน Pinocchio (nq==2) จะไม่ set position (ต้องใช้ sin/cos)
-              แต่จะ set velocity ให้ (ซึ่งพอสำหรับ control ส่วนใหญ่)
-        """
         name_to_i = {n: i for i, n in enumerate(msg.name)}
+        updated_names = set()
 
-        updated_any = False
-        for a in self.actuated:
-            n = a["name"]
-            if n not in name_to_i:
+        for j_name, info in self.joint_info.items():
+            if j_name not in name_to_i:
                 continue
-            i = name_to_i[n]
+            i = name_to_i[j_name]
 
-            # position
-            if len(msg.position) > i and a["nq"] == 1:
-                self.q_current[a["iq"]] = msg.position[i]
+            if len(msg.position) > i:
+                pos = float(msg.position[i])
+                iq, nq = info["iq"], info["nq"]
+                if nq == 1:
+                    self.q_current[iq] = pos
+                elif nq == 2:
+                    self.q_current[iq] = float(np.cos(pos))
+                    self.q_current[iq + 1] = float(np.sin(pos))
 
-            # velocity
             if len(msg.velocity) > i:
-                self.u_current[a["iv"]] = msg.velocity[i]
+                self.u_current[info["iv"]] = float(msg.velocity[i])
 
-            updated_any = True
+            updated_names.add(j_name)
 
-        if updated_any:
-            self.joint_ready = True
+        if updated_names:
+            self._seen_joint_states |= updated_names
+            if self.actuated_name_set.issubset(self._seen_joint_states):
+                self.joint_ready = True
 
-    # ========================================================
-    # Helpers
-    # ========================================================
-    def set_q_ref_actuated(self, joint_name, value):
-        """
-        หยอดค่าใส่ q_ref_actuated ให้ถูกตำแหน่ง "act_idx" (robust)
-        """
-        idx = self.act_name_to_act_idx.get(joint_name, None)
-        if idx is None:
-            return
-        self.q_ref_actuated[idx] = float(value)
-
-    def _build_tau_override_dict(self):
-        """
-        รวม per-joint torque limits จาก:
-        - tau_limits (array ตาม order actuated)
-        - tau_override (string map ตามชื่อ) ซึ่งทับค่าที่ซ้ำ
-        สุดท้ายคืน dict {joint_name: tau_max}
-        """
-        tau_override = {}
-
-        # 1) array ตามลำดับ actuated
-        arr = self.get_parameter('tau_limits').value
-        if isinstance(arr, (list, tuple)) and len(arr) == self.na:
-            for i, a in enumerate(self.actuated):
-                try:
-                    tau_override[a["name"]] = float(arr[i])
-                except Exception:
-                    pass
-
-        # 2) string map ทับค่า
-        s = self.get_parameter('tau_override').value
-        tau_override.update(_parse_tau_override_string(str(s)))
-
-        return tau_override
-
-    # ========================================================
-    # Control loop
-    # ========================================================
+    # ======================================================
+    # CONTROL LOOP
+    # ======================================================
     def control_loop(self):
-        if not (self.imu_ready and self.odom_ready and self.joint_ready):
-            return
+        if self.state_source == 'ekf':
+            if not (self.odom_ready and self.joint_ready):
+                return
+        else:
+            if not (self.imu_ready and self.odom_ready and self.joint_ready):
+                return
 
-        # 1) Read tuning params
+        self._apply_startup_standup()
+
+        # Rate Limiter for Z
+        max_dz = 0.15 * self.dt
+        dz = self.target_base_height - self.current_z_ref
+        if dz > max_dz:
+            self.current_z_ref += max_dz
+        elif dz < -max_dz:
+            self.current_z_ref -= max_dz
+        else:
+            self.current_z_ref = self.target_base_height
+
+        q, u = self.q_current.copy(), self.u_current.copy()
+        self._refresh_posture_ref_from_current(q)
+
+        # IK reference (hip/knee)
+        q_hip_l, q_knee_l = self.leg_ik.compute(self.target_X, -self.current_z_ref)
+
+        self.set_q_ref_actuated("left_hip_joint",   q_hip_l)
+        self.set_q_ref_actuated("left_knee_joint",  q_knee_l)
+
+        self.set_q_ref_actuated("right_hip_joint",  q_hip_l)      # หรือ -q_hip_l ถ้าต้องการ
+        self.set_q_ref_actuated("right_knee_joint", q_knee_l)    # ← flip ตรงนี้สำคัญ
+
+        # Boost / Regular
+        w_height_base = float(self.get_parameter('weight_height').value)
+        kp_z_base = float(self.get_parameter('kp_z').value)
+        kd_z_base = float(self.get_parameter('kd_z').value)
+        zdd_clip_use = 8.0
+        knee_tau_scale_use = float(self.get_parameter('knee_tau_scale').value)
+        tau_override = self._build_tau_override_dict()
+
+        if self._boost_active() or (bool(self.get_parameter('standup_enable').value) and not self._stand_done):
+            kp_z_use = kp_z_base * float(self.get_parameter('height_boost_kp_mult').value)
+            w_height_use = w_height_base * float(self.get_parameter('height_boost_w_mult').value)
+            zdd_clip_use = float(self.get_parameter('height_boost_zdd_clip').value)
+            knee_tau_scale_use = float(self.get_parameter('height_boost_knee_tau_scale').value)
+
+            boost_tau_s = str(self.get_parameter('height_boost_tau_override').value)
+            if boost_tau_s.strip():
+                tau_override.update(_parse_tau_override_string(boost_tau_s))
+        else:
+            kp_z_use, w_height_use = kp_z_base, w_height_base
+
         params = {
-            'w_height': float(self.get_parameter('weight_height').value),
+            'w_height': w_height_use,
             'w_roll': float(self.get_parameter('weight_roll').value),
-            'w_lqr_pitch': float(self.get_parameter('weight_lqr_pitch').value),
-            'w_yaw': float(self.get_parameter('weight_yaw').value),
             'w_posture': float(self.get_parameter('weight_posture').value),
 
-            'kp_z': float(self.get_parameter('kp_z').value),
-            'kd_z': float(self.get_parameter('kd_z').value),
-            'kp_roll': float(self.get_parameter('kp_roll').value),
-            'kd_roll': float(self.get_parameter('kd_roll').value),
-            'kp_yaw': float(self.get_parameter('kp_yaw').value),
-            'kd_yaw': float(self.get_parameter('kd_yaw').value),
-            'kp_post': float(self.get_parameter('kp_posture').value),
-            'kd_post': float(self.get_parameter('kd_posture').value),
+            'kp_z': kp_z_use, 'kd_z': kd_z_base,
+            'kp_roll': float(self.get_parameter('kp_roll').value), 'kd_roll': float(self.get_parameter('kd_roll').value),
+
+            'kp_hip': float(self.get_parameter('kp_hip').value), 'kd_hip': float(self.get_parameter('kd_hip').value),
+            'kp_knee': float(self.get_parameter('kp_knee').value), 'kd_knee': float(self.get_parameter('kd_knee').value),
 
             'tau_limit': float(self.get_parameter('tau_limit').value),
             'mu': float(self.get_parameter('friction_mu').value),
+
+            'zdd_clip': float(zdd_clip_use),
         }
 
-        # 2) Update yaw ref + IK
-        self.yaw_ref = wrap_pi(self.yaw_ref + self.w_ref * self.dt)
-
-        q_hip, q_knee = self.leg_ik.compute(self.target_X, -self.target_L)
-        for side in ["left", "right"]:
-            self.set_q_ref_actuated(f"{side}_hip_joint", q_hip)
-            self.set_q_ref_actuated(f"{side}_knee_joint", q_knee)
-
-        # 3) Per-joint torque limits dict
-        tau_override = self._build_tau_override_dict()
-
-        # 4) Knee spring params
-        knee_k = float(self.get_parameter('knee_spring_k').value)
-        knee_b = float(self.get_parameter('knee_spring_b').value)
-        knee_q0_L = float(self.get_parameter('knee_spring_q0_left').value)
-        knee_q0_R = float(self.get_parameter('knee_spring_q0_right').value)
-        knee_sgn_L = float(self.get_parameter('knee_spring_sign_left').value)
-        knee_sgn_R = float(self.get_parameter('knee_spring_sign_right').value)
-
         try:
-            out = solve_wbc_idqp_full_dynamic(
-                model=self.model,
-                data=self.data,
-                q=self.q_current,
-                u=self.u_current,
+            out = self._call_solver_safely(dict(
+                model=self.model, data=self.data, q=q, u=u,
                 wheel_frames={"left": "left_wheel_link", "right": "right_wheel_link"},
-                lqr_lut=self.lqr_table,
                 dt=self.dt,
-                target_L_pendulum=self.target_L,
-                yaw_ref=self.yaw_ref,
-                v_ref=self.v_ref,
+                target_base_height=float(self.current_z_ref),
+                target_roll=0.0,
                 q_ref_actuated=self.q_ref_actuated,
-                alpha_bg=20.0,
-
-                # torque limits
                 tau_override=tau_override,
 
-                # knee spiral torsion spring (parallel)
-                knee_spring_k=knee_k,
-                knee_spring_b=knee_b,
-                knee_spring_q0_left=knee_q0_L,
-                knee_spring_q0_right=knee_q0_R,
-                knee_spring_sign_left=knee_sgn_L,
-                knee_spring_sign_right=knee_sgn_R,
+                alpha_bg=float(self.get_parameter('alpha_bg').value),
+                w_roll_slack=float(self.get_parameter('w_roll_slack').value),
 
-                # weights/gains/limits
+                knee_tau_scale=float(knee_tau_scale_use),
+                hip_tau_scale=float(self.get_parameter('hip_tau_scale').value),
+                waist_tau_scale=float(self.get_parameter('waist_tau_scale').value),
+                posture_qdd_clip=float(self.get_parameter('posture_qdd_clip').value),
+
+                knee_spring_k=float(self.get_parameter('knee_spring_k').value),
+                knee_spring_b=float(self.get_parameter('knee_spring_b').value),
+                knee_spring_q0_left=float(self.get_parameter('knee_spring_q0_left').value),
+                knee_spring_q0_right=float(self.get_parameter('knee_spring_q0_right').value),
+                knee_spring_sign_left=float(self.get_parameter('knee_spring_sign_left').value),
+                knee_spring_sign_right=float(self.get_parameter('knee_spring_sign_right').value),
+
                 **params
-            )
+            ))
+            
 
-            # 5) Publish command (name/effort/position ต้องตรง order เดียวกัน)
-            cmd = JointState()
-            cmd.header.stamp = self.get_clock().now().to_msg()
-            cmd.name = self.actuated_names
-            cmd.effort = out['tau'].tolist()                         # len = na
-            cmd.position = self.q_ref_actuated.tolist()              # len = na
-            cmd.velocity = [0.0] * self.na
-            self.pub_joint_commands.publish(cmd)
+            self._publish_commands(out)
 
         except Exception as e:
             self.get_logger().error(f"WBC Fail: {e}")
+            self._publish_emergency_stop()
 
-            # Safe mode: torque = 0 เฉพาะ actuated joints
-            cmd = JointState()
-            cmd.header.stamp = self.get_clock().now().to_msg()
-            cmd.name = self.actuated_names
-            cmd.effort = [0.0] * self.na
-            cmd.position = self.q_ref_actuated.tolist()
-            cmd.velocity = [0.0] * self.na
-            self.pub_joint_commands.publish(cmd)
+    # ======================================================
+    # Helpers
+    # ======================================================
+    def _publish_commands(self, wbc_output):
+        publish_all = bool(self.get_parameter('publish_all_joints').value)
+        non_act_val = (float('nan')
+                       if str(self.get_parameter('non_actuated_effort_mode').value).strip().lower() == 'nan'
+                       else 0.0)
+
+        cmd = JointState()
+        cmd.header.stamp = self.get_clock().now().to_msg()
+
+        tau_map = {name: float(wbc_output['tau'][i]) for i, name in enumerate(wbc_output['actuated_names'])}
+        qref_map = {a["name"]: float(self.q_ref_actuated[a["act_idx"]]) for a in self.actuated}
+
+        cmd.name = self.all_joint_names if publish_all else self.actuated_names
+        cmd.effort = [tau_map.get(n, non_act_val if publish_all else 0.0) for n in cmd.name]
+        cmd.position = [qref_map.get(n, 0.0) for n in cmd.name]
+        cmd.velocity = [0.0] * len(cmd.name)
+
+        self.pub_joint_commands.publish(cmd)
+
+    def _publish_emergency_stop(self):
+        cmd = JointState()
+        cmd.header.stamp = self.get_clock().now().to_msg()
+        names = self.all_joint_names if bool(self.get_parameter('publish_all_joints').value) else self.actuated_names
+        cmd.name = names
+        cmd.effort = [0.0] * len(names)
+        cmd.position = [0.0] * len(names)
+        cmd.velocity = [0.0] * len(names)
+        self.pub_joint_commands.publish(cmd)
+
+    def _apply_startup_standup(self):
+        if not bool(self.get_parameter('standup_enable').value) or self._stand_done:
+            return
+        now_s = self.get_clock().now().nanoseconds * 1e-9
+        if self._stand_t0 is None:
+            self._stand_t0 = now_s
+            self._stand_h0 = float(self.target_base_height)
+
+        dur = max(float(self.get_parameter('standup_duration').value), 1e-6)
+        s = _smoothstep01((now_s - self._stand_t0) / dur)
+
+        h_target = float(self.get_parameter('standup_height').value)
+        self.target_base_height = float(self._stand_h0 + s * (h_target - self._stand_h0))
+
+        if s >= 1.0:
+            self._stand_done = True
+            self._stand_t0 = None
+
+    def _boost_active(self) -> bool:
+        if not bool(self.get_parameter('height_boost_enable').value) or self._boost_t0 is None:
+            return False
+        dt_boost = (self.get_clock().now() - self._boost_t0).nanoseconds * 1e-9
+        if dt_boost < float(self.get_parameter('height_boost_duration').value):
+            return True
+        self._boost_t0 = None
+        return False
+
+    def set_q_ref_actuated(self, joint_name, value):
+        idx = self.act_name_to_act_idx.get(joint_name, None)
+        if idx is not None:
+            self.q_ref_actuated[idx] = float(value)
+
+    def _refresh_posture_ref_from_current(self, q_local):
+        for a in self.actuated:
+            if a["name"] in IK_CONTROLLED_JOINTS:
+                continue
+            act_idx, iq, nq = a["act_idx"], a["iq"], a["nq"]
+            if nq == 1:
+                self.q_ref_actuated[act_idx] = float(q_local[iq])
+            elif nq == 2:
+                self.q_ref_actuated[act_idx] = float(np.arctan2(q_local[iq+1], q_local[iq]))
+
+    def _build_tau_override_dict(self):
+        tau_override = {}
+        try:
+            arr = self.get_parameter('tau_limits').value
+            if isinstance(arr, (list, tuple)) and len(arr) >= self.na:
+                for i, a in enumerate(self.actuated):
+                    tau_override[a["name"]] = float(arr[i])
+        except Exception:
+            pass
+
+        try:
+            s = self.get_parameter('tau_override').value
+            tau_override.update(_parse_tau_override_string(str(s)))
+        except Exception:
+            pass
+
+        return tau_override
+
+    def _call_solver_safely(self, kwargs: dict):
+        valid = {k: v for k, v in kwargs.items() if k in self.solve_sig.parameters}
+        return self.solve_wbc(**valid)
 
 
 def main(args=None):

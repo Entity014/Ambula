@@ -1,10 +1,75 @@
-teleop_twist_joy:
+teleop_node:
   ros__parameters:
-    require_enable_button: false
-    enable_button: 9        # จากรูป /joy ปุ่มที่กดแล้วเป็น 1 คือ index 8
+    # -----------------------------
+    # Topics
+    # -----------------------------
+    joy_topic: "/joy"
+    cmd_vel_topic: "/cmd_vel"
+    robot_state_topic: "/robot/state"
+    payload_state_topic: "/payload/state"
+    led_state_topic: "/led/state"
 
-    axis_linear.x: 1
-    scale_linear.x: 0.75
+    use_enable_button: false   # false = ไม่ต้องกดปุ่ม enable
+    use_turbo: false           # false = ปิด turbo
 
-    axis_angular.yaw: 2
-    scale_angular.yaw: 1.5
+    # -----------------------------
+    # cmd_vel mapping
+    # -----------------------------
+    axis_linear: 1
+    axis_angular: 2
+    scale_linear: 0.75
+    scale_angular: 1.5
+    deadzone: 0.05
+
+    # Deadman / Turbo
+    enable_button: 4
+    turbo_button: 5
+    turbo_multiplier: 2.0
+
+    publish_hz: 50.0
+    joy_timeout_sec: 0.25
+
+    # -----------------------------
+    # Height command via cmd_vel.linear.z (D-pad up/down)
+    # -----------------------------
+    height_min: 0.15
+    height_max: 0.30
+    height_default: 0.15
+    height_step: 0.01
+
+    # D-pad vertical: ใช้ axis เป็นหลัก (หลายจอยจะเป็นแกน 7)
+    dpad_vertical_axis: -1
+    dpad_threshold: 0.5
+    invert_dpad_axis: false
+
+    # ถ้า D-pad ของคุณมาเป็นปุ่ม ให้ตั้ง index ปุ่มแทน (ไม่งั้นปล่อย -1)
+    dpad_up_button: 11
+    dpad_down_button: 12
+
+    require_enable_for_height_change: true
+    publish_height_always: true
+
+    # -----------------------------
+    # Robot state (/robot/state) Vector3: x,y,z
+    #   x = 0..2  (3 buttons)
+    #   y = 0/1   (one-shot trigger; กดค้างไม่ยิงซ้ำ)
+    #   z = 0..2  (one button cycles)
+    # -----------------------------
+    publish_state_always: true
+    require_enable_for_state_change: true
+
+    # x state buttons (กดครั้งเดียว set state)
+    x_btn0: 2
+    x_btn1: 3
+    x_btn2: 1
+
+    # y trigger button (one-shot)
+    y_trigger_btn: 0
+    y_pulse_duration_ms: 100.0
+
+    # z cycle button (0->1->2->0)
+    z_cycle_btn: -1
+
+    # default states
+    state_x_default: 0
+    state_z_default: 0

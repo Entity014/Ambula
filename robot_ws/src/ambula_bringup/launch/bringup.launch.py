@@ -50,9 +50,16 @@ def generate_launch_description():
         )
     )
 
+    teleop_launch = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource(
+            [PathJoinSubstitution([controller_pkg_path, "launch", "teleop.launch.py"])]
+        )
+    )
+
     ld = LaunchDescription()
     ld.add_action(description_launch)
     # ld.add_action(leg_kinematic_launch)
     ld.add_action(state_estimation_launch)
-    ld.add_action(balance_control_launch)
+    # ld.add_action(balance_control_launch)
+    ld.add_action(teleop_launch)
     return ld

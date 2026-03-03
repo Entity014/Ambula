@@ -6,6 +6,7 @@
 #include <IntervalTimer.h>
 
 #include "config.h"
+#include "lqr.h" // <--- เพิ่ม LQR Header
 #include "imu.h"
 #include "odometry.h"
 #include "kinematics.h"
@@ -94,13 +95,17 @@ rcl_publisher_t debug_publisher;
 rcl_subscription_t twist_subscriber;
 rcl_subscription_t joint_cmd_subscriber;
 rcl_subscription_t robot_state_subscriber;
+rcl_subscription_t payload_state_subscriber;
+rcl_subscription_t led_state_subscriber;
 
 sensor_msgs__msg__Imu imu_msg;
 sensor_msgs__msg__JointState joint_state_msg;
 sensor_msgs__msg__JointState joint_state_motor_msg;
 sensor_msgs__msg__JointState joint_cmd_msg;
 nav_msgs__msg__Odometry odom_msg;
-geometry_msgs__msg__Point robot_state_msg;
+std_msgs__msg__Int8 robot_state_msg;
+std_msgs__msg__Int8 payload_state_msg;
+std_msgs__msg__Int8 led_state_msg;
 geometry_msgs__msg__Twist twist_msg;
 geometry_msgs__msg__Twist debug_msg;
 
@@ -158,6 +163,36 @@ Kinematics kinematics(
     WHEEL_DIAMETER,
     LR_WHEELS_DISTANCE);
 
+// ---------- Leg Kinematics สำหรับประมาณความสูงให้ LQR ----------
+LegKinematics::link_param LEG_LEFT_PARAM = {
+    .L1 = LEG_L1,
+    .L2 = LEG_L2,
+    .L3 = LEG_L3,
+    .hip_x = LEG_HIP_X,
+    .hip_y = LEG_HIP_Y_LEFT,
+    .hip_z = LEG_HIP_Z,
+    .align_y = LEG_ALIGN_Y,
+    .waist_off = WAIST_OFFSET_LEFT,
+    .hip_off = HIP_OFFSET_LEFT,
+    .knee_off = KNEE_OFFSET_LEFT,
+};
+
+LegKinematics::link_param LEG_RIGHT_PARAM = {
+    .L1 = LEG_L1,
+    .L2 = LEG_L2,
+    .L3 = LEG_L3,
+    .hip_x = LEG_HIP_X,
+    .hip_y = LEG_HIP_Y_RIGHT,
+    .hip_z = LEG_HIP_Z,
+    .align_y = LEG_ALIGN_Y,
+    .waist_off = WAIST_OFFSET_RIGHT,
+    .hip_off = HIP_OFFSET_RIGHT,
+    .knee_off = KNEE_OFFSET_RIGHT,
+};
+
+LegKinematics leg_left_fk(LEG_LEFT_PARAM);
+LegKinematics leg_right_fk(LEG_RIGHT_PARAM);
+
 IMU imuSensor;
 Servo_Driver servoActuator(SERVOMIN, SERVOMAX, SERVO_FREQ);
 
@@ -182,6 +217,183 @@ static inline float dir_sign(int8_t d)
 
 float target_joint_pos[N_JOINTS] = {0.0f};
 float target_joint_eff[N_JOINTS] = {0.0f};
+
+//------------------------------ < LQR Components > ------------------------------//
+static IntervalTimer lqr_timer;
+
+// shared outputs from ISR
+static volatile float tau_L_cmd = 0.0f;
+static volatile float tau_R_cmd = 0.0f;
+
+// shared references from ROS callback
+static volatile float v_ref_lqr = 0.0f;
+static volatile float r_ref_lqr = 0.0f;
+
+// enable flag
+static volatile bool lqr_enable = false;
+
+static volatile float v_est = 0.0f;
+static volatile float v_est_left = 0.0f;
+static volatile float v_est_right = 0.0f;
+static volatile bool have_wheel_est = false;
+
+static volatile float pitch_ref_lqr = 0.0f;
+
+// ----- Outer PI Velocity-to-Pitch -----
+static float vel_integral = 0.0f;
+static const float Kp_v2p = 0.15f;  // เริ่มต้นปลอดภัย
+static const float Ki_v2p = 0.011f; // เริ่มต้นปลอดภัย
+static const float I_max = 0.6f;
+
+struct LqrGains
+{
+    float k00, k01, k02, k03; // tau_fwd
+    float k10, k11, k12, k13; // tau_yaw
+};
+
+// ----- Scheduled gains shared with ISR -----
+static volatile LqrGains K_sched = {
+    -3.635093f, 0.311460f, -0.729928f, 0.000000f,
+    0.0f, 0.0f, 0.0f, 0.100000f};
+
+static inline float lerp(float a, float b, float t) { return a + (b - a) * t; }
+
+static inline void getScheduledGains(float h, LqrGains &out)
+{
+    // clamp h into table range
+    if (h <= AMBULA_H[0])
+    {
+        out.k00 = AMBULA_K[0][0][0];
+        out.k01 = AMBULA_K[0][0][1];
+        out.k02 = AMBULA_K[0][0][2];
+        out.k03 = AMBULA_K[0][0][3];
+        out.k10 = AMBULA_K[0][1][0];
+        out.k11 = AMBULA_K[0][1][1];
+        out.k12 = AMBULA_K[0][1][2];
+        out.k13 = AMBULA_K[0][1][3];
+        return;
+    }
+    if (h >= AMBULA_H[AMBULA_N - 1])
+    {
+        int i = AMBULA_N - 1;
+        out.k00 = AMBULA_K[i][0][0];
+        out.k01 = AMBULA_K[i][0][1];
+        out.k02 = AMBULA_K[i][0][2];
+        out.k03 = AMBULA_K[i][0][3];
+        out.k10 = AMBULA_K[i][1][0];
+        out.k11 = AMBULA_K[i][1][1];
+        out.k12 = AMBULA_K[i][1][2];
+        out.k13 = AMBULA_K[i][1][3];
+        return;
+    }
+
+    // find segment [i, i+1]
+    int i = 0;
+    for (; i < AMBULA_N - 1; ++i)
+    {
+        if (h < AMBULA_H[i + 1])
+            break;
+    }
+
+    float h0 = AMBULA_H[i];
+    float h1 = AMBULA_H[i + 1];
+    float t = (h - h0) / (h1 - h0);
+
+    // interpolate all gains
+    out.k00 = lerp(AMBULA_K[i][0][0], AMBULA_K[i + 1][0][0], t);
+    out.k01 = lerp(AMBULA_K[i][0][1], AMBULA_K[i + 1][0][1], t);
+    out.k02 = lerp(AMBULA_K[i][0][2], AMBULA_K[i + 1][0][2], t);
+    out.k03 = lerp(AMBULA_K[i][0][3], AMBULA_K[i + 1][0][3], t);
+
+    out.k10 = lerp(AMBULA_K[i][1][0], AMBULA_K[i + 1][1][0], t);
+    out.k11 = lerp(AMBULA_K[i][1][1], AMBULA_K[i + 1][1][1], t);
+    out.k12 = lerp(AMBULA_K[i][1][2], AMBULA_K[i + 1][1][2], t);
+    out.k13 = lerp(AMBULA_K[i][1][3], AMBULA_K[i + 1][1][3], t);
+}
+
+void lqr_isr()
+{
+    if (!lqr_enable)
+    {
+        tau_L_cmd = tau_R_cmd = 0.0f;
+        return;
+    }
+
+    float theta, theta_dot, r_imu;
+    LqrGains Klocal;
+    float vl = 0.0f, vr = 0.0f; // ← เก็บค่าที่ปลอดภัย
+    float vref = 0.0f, rref = 0.0f;
+    float pitch_ref = 0.0f;
+
+    noInterrupts();
+    theta = imuSensor.getPitch();
+    theta_dot = imuSensor.getPitchRate();
+    r_imu = imuSensor.getYawRate();
+    vl = v_est_left; // copy มาใช้
+    vr = v_est_right;
+    vref = v_ref_lqr;
+    rref = r_ref_lqr;
+    pitch_ref = pitch_ref_lqr;
+    Klocal.k00 = K_sched.k00;
+    Klocal.k01 = K_sched.k01;
+    Klocal.k02 = K_sched.k02;
+    Klocal.k03 = K_sched.k03;
+    Klocal.k10 = K_sched.k10;
+    Klocal.k11 = K_sched.k11;
+    Klocal.k12 = K_sched.k12;
+    Klocal.k13 = K_sched.k13;
+    interrupts();
+
+    if (fabsf(theta) > 0.7f)
+    {
+        tau_L_cmd = tau_R_cmd = 0.0f;
+        return;
+    }
+
+    float x0 = (theta - pitch_ref);
+    float x1 = theta_dot;
+    float x2 = (v_est - vref); // ใช้ v_est หลัก (จาก odometry)
+    float x3 = (r_imu - rref);
+
+    float tau_fwd = -(Klocal.k00 * x0 + Klocal.k01 * x1 + Klocal.k02 * x2 + Klocal.k03 * x3);
+    float tau_yaw = -(Klocal.k10 * x0 + Klocal.k11 * x1 + Klocal.k12 * x2 + Klocal.k13 * x3);
+
+    float tauL = tau_fwd - tau_yaw;
+    float tauR = tau_fwd + tau_yaw;
+
+    // ================== Slip Compensation (แก้ vR_isr → vr) ==================
+    float diff_vel = (vr - vl) - (rref * LR_WHEELS_DISTANCE); // ← แก้ตรงนี้
+    float K_slip = 1.0f;                                      // จูนได้
+    float tau_slip = K_slip * diff_vel;
+
+    // tauL += tau_slip; // ล้อซ้าย +
+    // tauR -= tau_slip; // ล้อขวา -
+
+    tauL = clampf(tauL, -TAU_MAX, TAU_MAX);
+    tauR = clampf(tauR, -TAU_MAX, TAU_MAX);
+
+    tau_L_cmd = tauL;
+    tau_R_cmd = tauR;
+}
+
+static float h_filt = 0.16f;        // init กลางๆ
+static const float H_ALPHA = 0.10f; // ปรับตาม rate ที่คุณเรียก update
+
+static inline void updateGainScheduling(float h_hat)
+{
+    // filter height
+    h_filt = h_filt + H_ALPHA * (h_hat - h_filt);
+    h_filt = clampf(h_filt, AMBULA_H[0], AMBULA_H[AMBULA_N - 1]);
+
+    // compute scheduled K
+    LqrGains Knew;
+    getScheduledGains(h_filt, Knew);
+
+    // atomic swap ให้ ISR
+    noInterrupts();
+    K_sched = Knew;
+    interrupts();
+}
 
 //------------------------------ < Fuction Prototype > ------------------------------//
 
@@ -234,20 +446,13 @@ struct JointCfg
     ODrvData *data;
     int pos_idx;
 
-    // scale (หน่วย base: rad หรือ deg แล้วแต่ pipeline)
     float pos_scale;
     float vel_scale;
-
     float pos_offset_rad;
-
-    // flip: apply กับ raw input (เหมือนใน python)
     bool flip;
-
-    // direction: apply ตอนท้ายสุดที่ output (+1/-1)
     int8_t direction;
-
     bool pos0_valid;
-    float pos0_raw; // initial Pos_Estimate (turns)
+    float pos0_raw;
     bool output_deg;
 };
 
@@ -317,7 +522,7 @@ static bool capture_joint_zero(uint32_t timeout_ms = 800)
             }
 
             Get_Encoder_Estimates_msg_t fb;
-            if (m.drv->getFeedback(fb, 3))
+            if (m.drv->getFeedback(fb, 5))
             {
                 m.pos0_raw = fb.Pos_Estimate; // turns
                 m.pos0_valid = true;
@@ -360,8 +565,6 @@ void setup()
             flashLED(3);
         }
     }
-    // servoActuator.setServoAngle(LEFT_WAIST_CH, waist_arr[0]);  // left waist
-    // servoActuator.setServoAngle(RIGHT_WAIST_CH, waist_arr[1]); // right waist
 
     // CAN & ODrive
     if (!setupCan())
@@ -396,16 +599,19 @@ void setup()
             break; // ไม่บล็อกนานเกิน
     }
 
-    bool zero_ok = capture_joint_zero(1200);
+    bool zero_ok = capture_joint_zero(2000);
 
     odom.setFrames("odom", "base_link");
     odom.setGeometry((WHEEL_DIAMETER / 2.0f), LR_WHEELS_DISTANCE);
-    odom.setUnwrapPosition(true); // ถ้า encoder wrap 2π
+    odom.setUnwrapPosition(true);
     odom.setOmegaLpfAlpha(0.05f);
     odom.setDtMax(1.0f);
 
     Serial.begin(921600);
     set_microros_serial_transports(Serial);
+
+    // เปิด LQR Timer ทิ้งไว้ที่ 200 Hz (5000 us)
+    lqr_timer.begin(lqr_isr, 5000);
 }
 
 void loop()
@@ -432,6 +638,7 @@ void loop()
         }
         break;
     case AGENT_DISCONNECTED:
+        lqr_enable = false; // ปิด LQR เซฟหุ่นตอนหลุดการเชื่อมต่อ
         destroyEntities();
         connection_state = WAITING_AGENT;
         break;
@@ -453,6 +660,12 @@ void twistCallback(const void *msgin)
     {
         prev_cmd_time = millis();
     }
+
+    // อัปเดต Reference ให้ LQR ISR
+    noInterrupts();
+    v_ref_lqr = twist_msg.linear.x;
+    r_ref_lqr = twist_msg.angular.z;
+    interrupts();
 }
 
 void jointCommandCallback(const void *msgin)
@@ -476,10 +689,10 @@ void jointCommandCallback(const void *msgin)
 }
 void robotCommandCallback(const void *msgin)
 {
-    auto *m = (const geometry_msgs__msg__Point *)msgin;
+    auto *m = (const std_msgs__msg__Int8 *)msgin;
     robot_state_msg = *m;
 
-    switch (int(robot_state_msg.x))
+    switch (int(robot_state_msg.data))
     {
     case IDLE:
         robot_state = IDLE;
@@ -494,8 +707,14 @@ void robotCommandCallback(const void *msgin)
         robot_state = IDLE;
         break;
     }
+}
 
-    switch (int(robot_state_msg.y))
+void payloadCommandCallback(const void *msgin)
+{
+    auto *m = (const std_msgs__msg__Int8 *)msgin;
+    payload_state_msg = *m;
+
+    switch (payload_state_msg.data)
     {
     case HOLD:
         payload_state = HOLD;
@@ -507,8 +726,14 @@ void robotCommandCallback(const void *msgin)
         payload_state = HOLD;
         break;
     }
+}
 
-    switch (int(robot_state_msg.z))
+void ledCommandCallback(const void *msgin)
+{
+    auto *m = (const std_msgs__msg__Int8 *)msgin;
+    led_state_msg = *m;
+
+    switch (led_state_msg.data)
     {
     case TURN_ON:
         light_state = TURN_ON;
@@ -533,6 +758,27 @@ void controlCallback(rcl_timer_t *timer, int64_t last_call_time)
         changeMode();
         moveBase();
         moveActuator();
+
+        if (robot_state == OPERATING && have_wheel_est)
+        {
+            float v_err = v_ref_lqr - v_est;
+
+            vel_integral += v_err * 0.002f;                     // dt = 5 ms (200 Hz)
+            vel_integral = clampf(vel_integral, -I_max, I_max); // anti-windup
+
+            float pitch_cmd = Kp_v2p * v_err + Ki_v2p * vel_integral;
+
+            noInterrupts();
+            pitch_ref_lqr = clampf(pitch_cmd, -0.4f, 0.4f);
+            interrupts();
+        }
+        else
+        {
+            noInterrupts();
+            pitch_ref_lqr = 0.0f;
+            vel_integral = 0.0f; // reset integral
+            interrupts();
+        }
 
         struct timespec time_stamp = getTime();
         imu_msg = imuSensor.getData();
@@ -559,26 +805,44 @@ void changeMode()
         switch (robot_state)
         {
         case IDLE:
+            lqr_enable = false;
+            vel_integral = 0.0f;
             all_odrives_idle();
             wheels_set_velocity_mode();
             break;
         case SLIDE:
+            lqr_enable = false;
+            vel_integral = 0.0f;
             all_odrives_closed();
             wheels_set_velocity_mode();
             break;
         case OPERATING:
-            all_odrives_closed();
-            wheels_set_torque_mode();
-            target_joint_pos[J_LEFT_HIP] = joint_state_msg.position.data[J_LEFT_HIP];
-            target_joint_pos[J_LEFT_KNEE] = joint_state_msg.position.data[J_LEFT_KNEE];
-            target_joint_pos[J_RIGHT_HIP] = joint_state_msg.position.data[J_RIGHT_HIP];
-            target_joint_pos[J_RIGHT_KNEE] = joint_state_msg.position.data[J_RIGHT_KNEE];
+            noInterrupts();
+            vel_integral = 0.0f;  // ล้างค่า Integral สะสมจากโหมดอื่น
+            pitch_ref_lqr = 0.0f; // เริ่มจากตัวตรงเสมอ
+            v_ref_lqr = 0.0f;
+            r_ref_lqr = 0.0f;
+            tau_L_cmd = 0.0f;
+            tau_R_cmd = 0.0f;
+            interrupts();
+
             for (int i = 0; i < N_JOINTS; i++)
             {
                 target_joint_eff[i] = 0.0f;
             }
+            tau_L_cmd = 0;
+            tau_R_cmd = 0;
+            target_joint_pos[J_LEFT_HIP] = 1.57f;
+            target_joint_pos[J_LEFT_KNEE] = 2.408554368f;
+            target_joint_pos[J_RIGHT_HIP] = 1.57f;
+            target_joint_pos[J_RIGHT_KNEE] = 2.408554368f;
+            all_odrives_closed();
+            wheels_set_torque_mode();
+            lqr_enable = true; // เปิด LQR ในโหมดทรงตัว
             break;
         default:
+            lqr_enable = false;
+            vel_integral = 0.0f;
             all_odrives_idle();
             wheels_set_velocity_mode();
             break;
@@ -595,11 +859,40 @@ void moveBase()
         twist_msg.linear.y = 0.0;
         twist_msg.angular.z = 0.0;
 
+        noInterrupts();
+        v_ref_lqr = 0.0f;
+        r_ref_lqr = 0.0f;
+        interrupts();
+
         digitalWrite(LED_PIN, HIGH);
     }
 
     if (robot_state == SLIDE)
     {
+        float left_hip_turns = ((2.0 * dir_sign(maps[0].direction)) - maps[0].pos_offset_rad) / maps[0].pos_scale;
+        if (maps[0].flip)
+            left_hip_turns = -left_hip_turns;
+        left_hip_turns += maps[0].pos0_raw;
+        odrv_left_hip.setPosition(left_hip_turns, 0.0f, 0.0f);
+
+        float left_knee_turns = ((2.408554368 * dir_sign(maps[1].direction)) - maps[1].pos_offset_rad) / maps[1].pos_scale;
+        if (maps[1].flip)
+            left_knee_turns = -left_knee_turns;
+        left_knee_turns += maps[1].pos0_raw;
+        odrv_left_knee.setPosition(left_knee_turns, 0.0f, 0.0f);
+
+        float right_hip_turns = ((2.0 * dir_sign(maps[3].direction)) - maps[3].pos_offset_rad) / maps[3].pos_scale;
+        if (maps[3].flip)
+            right_hip_turns = -right_hip_turns;
+        right_hip_turns += maps[3].pos0_raw;
+        odrv_right_hip.setPosition(right_hip_turns, 0.0f, 0.0f);
+
+        float right_knee_turns = ((2.408554368 * dir_sign(maps[4].direction)) - maps[4].pos_offset_rad) / maps[4].pos_scale;
+        if (maps[4].flip)
+            right_knee_turns = -right_knee_turns;
+        right_knee_turns += maps[4].pos0_raw;
+        odrv_right_knee.setPosition(right_knee_turns, 0.0f, 0.0f);
+
         Kinematics::rpm req_rpm = kinematics.getRPM(
             twist_msg.linear.x,
             twist_msg.linear.y,
@@ -611,35 +904,39 @@ void moveBase()
     }
     else if (robot_state == OPERATING)
     {
-        odrv_left_wheel.setTorque(-target_joint_eff[J_LEFT_WHEEL]);
-        odrv_right_wheel.setTorque(target_joint_eff[J_RIGHT_WHEEL]);
+        // 1. นำแรงบิดจาก LQR (ที่วิ่งอยู่เบื้องหลัง) มาจ่ายให้ล้อ
+        float tau_wheel_left = (float)tau_L_cmd;
+        float tau_wheel_right = (float)tau_R_cmd;
+        odrv_left_wheel.setTorque(-tau_wheel_left);
+        odrv_right_wheel.setTorque(tau_wheel_right);
 
-        float left_hip_turns = (target_joint_pos[J_LEFT_HIP] - maps[0].pos_offset_rad) / maps[0].pos_scale;
+        // 2. รับค่าจาก WBC (ผ่าน ROS) ไปคุม Position และ Torque ของขา
+        float left_hip_turns = ((target_joint_pos[J_LEFT_HIP] * dir_sign(maps[0].direction)) - maps[0].pos_offset_rad) / maps[0].pos_scale;
         if (maps[0].flip)
             left_hip_turns = -left_hip_turns;
         left_hip_turns += maps[0].pos0_raw;
-        odrv_left_hip.setPosition(left_hip_turns + maps[0].pos0_raw, 0.0f, -target_joint_eff[J_LEFT_HIP] * 0.05f);
+        odrv_left_hip.setPosition(left_hip_turns, 0.0f, -target_joint_eff[J_LEFT_HIP] * 0.05f);
 
-        float left_knee_turns = (target_joint_pos[J_LEFT_KNEE] - maps[1].pos_offset_rad) / maps[1].pos_scale;
+        float left_knee_turns = ((target_joint_pos[J_LEFT_KNEE] * dir_sign(maps[1].direction)) - maps[1].pos_offset_rad) / maps[1].pos_scale;
         if (maps[1].flip)
             left_knee_turns = -left_knee_turns;
         left_knee_turns += maps[1].pos0_raw;
-        odrv_left_knee.setPosition(left_knee_turns + maps[1].pos0_raw, 0.0f, target_joint_eff[J_LEFT_KNEE] * 0.1f);
+        odrv_left_knee.setPosition(left_knee_turns, 0.0f, target_joint_eff[J_LEFT_KNEE] * 0.1f);
 
-        float right_hip_turns = (target_joint_pos[J_RIGHT_HIP] - maps[3].pos_offset_rad) / maps[3].pos_scale;
+        float right_hip_turns = ((target_joint_pos[J_RIGHT_HIP] * dir_sign(maps[3].direction)) - maps[3].pos_offset_rad) / maps[3].pos_scale;
         if (maps[3].flip)
             right_hip_turns = -right_hip_turns;
         right_hip_turns += maps[3].pos0_raw;
-        odrv_right_hip.setPosition(right_hip_turns + maps[3].pos0_raw, 0.0f, target_joint_eff[J_RIGHT_HIP] * 0.05f);
+        odrv_right_hip.setPosition(right_hip_turns, 0.0f, target_joint_eff[J_RIGHT_HIP] * 0.05f);
 
-        float right_knee_turns = (target_joint_pos[J_RIGHT_KNEE] - maps[4].pos_offset_rad) / maps[4].pos_scale;
+        float right_knee_turns = ((target_joint_pos[J_RIGHT_KNEE] * dir_sign(maps[4].direction)) - maps[4].pos_offset_rad) / maps[4].pos_scale;
         if (maps[4].flip)
             right_knee_turns = -right_knee_turns;
         right_knee_turns += maps[4].pos0_raw;
-        odrv_right_knee.setPosition(right_knee_turns + maps[4].pos0_raw, 0.0f, -target_joint_eff[J_RIGHT_KNEE] * 0.1f);
+        odrv_right_knee.setPosition(right_knee_turns, 0.0f, -target_joint_eff[J_RIGHT_KNEE] * 0.1f);
 
-        debug_msg.linear.x = -target_joint_eff[J_LEFT_WHEEL];
-        debug_msg.linear.y = target_joint_eff[J_RIGHT_WHEEL];
+        debug_msg.linear.x = -tau_wheel_left;
+        debug_msg.linear.y = tau_wheel_right;
         debug_msg.linear.z = left_hip_turns;
         debug_msg.angular.x = left_knee_turns;
         debug_msg.angular.y = right_hip_turns;
@@ -678,8 +975,8 @@ void moveActuator()
         if (millis() - payload_pulse_start_ms >= PAYLOAD_PULSE_MS)
         {
             payload_pulsing = false;
-            payload_state = HOLD;            // กลับเป็น HOLD
-            digitalWrite(PAYLOAD_PIN, HIGH); // ปิดคอยล์
+            payload_state = HOLD;
+            digitalWrite(PAYLOAD_PIN, HIGH);
         }
     }
 
@@ -702,26 +999,20 @@ void moveActuator()
 
 void publishData()
 {
-    // 1. เตรียม Timestamp และ IMU
     struct timespec time_stamp = getTime();
-
-    // 2. เตรียม Joint State Header
     joint_state_msg.header.stamp.sec = time_stamp.tv_sec;
     joint_state_msg.header.stamp.nanosec = time_stamp.tv_nsec;
 
-    // เคลียร์สถานะการอ่านค่าล้อ
     got_left_wheel = false;
     got_right_wheel = false;
 
-    // 3. ดึงข้อมูลจาก ODrive Data Buffer (ที่ได้รับจาก CAN Callback)
     for (auto &m : maps)
     {
         Get_Encoder_Estimates_msg_t fb;
-        // timeout เล็กๆ 2–5 ms พอ (อย่าใช้ 0 เผื่อเน็ตช้า)
         if (m.drv->getFeedback(fb, 5))
         {
-            float pos_raw = fb.Pos_Estimate; // turns
-            float vel_raw = fb.Vel_Estimate; // turns/s
+            float pos_raw = fb.Pos_Estimate;
+            float vel_raw = fb.Vel_Estimate;
 
             joint_state_motor_msg.position.data[m.pos_idx] = pos_raw;
 
@@ -767,24 +1058,79 @@ void publishData()
         }
     }
 
-    // 4. คำนวณ Odometry
+    have_wheel = got_left_wheel && got_right_wheel;
+
     uint32_t now_ms = millis();
     float dt = (last_odom_ms == 0) ? 0.0f : (now_ms - last_odom_ms) * 1e-3f;
     last_odom_ms = now_ms;
 
-    // ส่ง Odometry ถ้าข้อมูลล้อมาครบและ dt อยู่ในเกณฑ์ที่เหมาะสม
-    if (dt > 0.0f && dt < 0.1f && got_left_wheel && got_right_wheel)
+    bool odom_ok = true;
+    if (dt <= 0.0f || dt > 0.1f)
+    {
+        noInterrupts();
+        have_wheel_est = false;
+        v_est = v_est_left = v_est_right = 0.0f;
+        interrupts();
+        odom_ok = false;
+    }
+
+    bool wheel_ok = have_wheel && odom_ok;
+
+    noInterrupts();
+    have_wheel_est = wheel_ok;
+    interrupts();
+
+    if (odom_ok && have_wheel)
     {
         if (odom.updateFromWheelPos(wheel_pos_l_rad, wheel_pos_r_rad, dt))
         {
+            // ✅ เรียกฟังก์ชันก่อน แล้วค่อย copy เข้า volatile ภายใต้ critical section
+            float temp_left = 0.0f, temp_right = 0.0f;
+            float vx = odom.getVx();
+
+            odom.getWheelVelocities(temp_left, temp_right);
+
+            noInterrupts();
+            v_est = vx;
+            v_est_left = temp_left;
+            v_est_right = temp_right;
+            interrupts();
+
             odom_msg = odom.getData();
             odom_msg.header.stamp.sec = time_stamp.tv_sec;
             odom_msg.header.stamp.nanosec = time_stamp.tv_nsec;
             RCSOFTCHECK(rcl_publish(&odom_publisher, &odom_msg, NULL));
         }
+        else
+        {
+            noInterrupts();
+            have_wheel_est = false;
+            v_est = v_est_left = v_est_right = 0.0f;
+            interrupts();
+        }
     }
 
-    // 5. Publish ข้อมูลทั้งหมดขึ้นไปที่ Pi (WBC)
+    // --------- คำนวณ FK เพื่ออัปเดต Gain Scheduling ของ LQR ---------
+    LegKinematics::joint_state jsL;
+    jsL.waist = 0.0f;
+    jsL.hip = -(float)joint_state_msg.position.data[J_LEFT_HIP];
+    jsL.knee = -(float)joint_state_msg.position.data[J_LEFT_KNEE];
+
+    LegKinematics::joint_state jsR;
+    jsR.waist = 0.0f;
+    jsR.hip = -(float)joint_state_msg.position.data[J_RIGHT_HIP];
+    jsR.knee = -(float)joint_state_msg.position.data[J_RIGHT_KNEE];
+
+    LegKinematics::foot_point fpL = leg_left_fk.getFootPosition(jsL);
+    LegKinematics::foot_point fpR = leg_right_fk.getFootPosition(jsR);
+
+    // ถ้า LQR เปิดอยู่ ให้ประเมินความสูงแล้วส่งไปปรับ Gain
+    if (robot_state == OPERATING && have_wheel_est)
+    {
+        float h_hat = -0.5f * (fpL.z + fpR.z);
+        updateGainScheduling(h_hat);
+    }
+
     RCSOFTCHECK(rcl_publish(&joint_state_publisher, &joint_state_msg, NULL));
     RCSOFTCHECK(rcl_publish(&joint_state_motor_publisher, &joint_state_motor_msg, NULL));
 }
@@ -870,8 +1216,18 @@ bool createEntities()
     RCCHECK(rclc_subscription_init_default(
         &robot_state_subscriber,
         &node_control,
-        ROSIDL_GET_MSG_TYPE_SUPPORT(geometry_msgs, msg, Point),
+        ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, Int8),
         "robot/state"));
+    RCCHECK(rclc_subscription_init_default(
+        &payload_state_subscriber,
+        &node_control,
+        ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, Int8),
+        "payload/state"));
+    RCCHECK(rclc_subscription_init_default(
+        &led_state_subscriber,
+        &node_control,
+        ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, Int8),
+        "led/state"));
 
     rosidl_runtime_c__String__init(&joint_cmd_msg.header.frame_id);
     rosidl_runtime_c__String__assign(&joint_cmd_msg.header.frame_id, "base_link");
@@ -901,7 +1257,7 @@ bool createEntities()
         feedbackCallback));
     executor_control = rclc_executor_get_zero_initialized_executor();
     executor_feedback = rclc_executor_get_zero_initialized_executor();
-    RCCHECK(rclc_executor_init(&executor_control, &support.context, 4, &allocator));
+    RCCHECK(rclc_executor_init(&executor_control, &support.context, 6, &allocator));
     RCCHECK(rclc_executor_init(&executor_feedback, &support.context, 1, &allocator));
     RCCHECK(rclc_executor_add_subscription(
         &executor_control,
@@ -921,10 +1277,21 @@ bool createEntities()
         &robot_state_msg,
         &robotCommandCallback,
         ON_NEW_DATA));
+    RCCHECK(rclc_executor_add_subscription(
+        &executor_control,
+        &payload_state_subscriber,
+        &payload_state_msg,
+        &payloadCommandCallback,
+        ON_NEW_DATA));
+    RCCHECK(rclc_executor_add_subscription(
+        &executor_control,
+        &led_state_subscriber,
+        &led_state_msg,
+        &ledCommandCallback,
+        ON_NEW_DATA));
     RCCHECK(rclc_executor_add_timer(&executor_control, &control_timer));
     RCCHECK(rclc_executor_add_timer(&executor_feedback, &feedback_timer));
 
-    // synchronize time with the agent
     syncTime();
     digitalWrite(LED_PIN, HIGH);
 
@@ -937,8 +1304,6 @@ bool destroyEntities()
     (void)rmw_uros_set_context_entity_destroy_session_timeout(rmw_context, 0);
 
     digitalWrite(PAYLOAD_PIN, HIGH);
-    // servoActuator.setServoAngle(LEFT_WAIST_CH, 90.0f);  // left waist
-    // servoActuator.setServoAngle(RIGHT_WAIST_CH, 90.0f); // right waist
 
     rosidl_runtime_c__String__fini(&joint_state_msg.header.frame_id);
     rosidl_runtime_c__String__Sequence__fini(&joint_state_msg.name);
@@ -966,6 +1331,8 @@ bool destroyEntities()
     rcl_subscription_fini(&twist_subscriber, &node_control);
     rcl_subscription_fini(&joint_cmd_subscriber, &node_control);
     rcl_subscription_fini(&robot_state_subscriber, &node_control);
+    rcl_subscription_fini(&payload_state_subscriber, &node_control);
+    rcl_subscription_fini(&led_state_subscriber, &node_control);
     rcl_node_fini(&node_control);
     rcl_timer_fini(&control_timer);
     rcl_timer_fini(&feedback_timer);
@@ -980,23 +1347,18 @@ bool destroyEntities()
 
 void syncTime()
 {
-    // get the current time from the agent
     unsigned long now = millis();
     RCCHECK(rmw_uros_sync_session(10));
     unsigned long long ros_time_ms = rmw_uros_epoch_millis();
-    // now we can find the difference between ROS time and uC time
     time_offset = ros_time_ms - now;
 }
 
 struct timespec getTime()
 {
     struct timespec tp = {0};
-    // add time difference between uC time and ROS time to
-    // synchronize time with ROS
     unsigned long long now = millis() + time_offset;
     tp.tv_sec = now / 1000;
     tp.tv_nsec = (now % 1000) * 1000000;
-
     return tp;
 }
 
@@ -1026,8 +1388,8 @@ bool request_state_with_retry(
 {
     for (int k = 0; k < max_retry; ++k)
     {
-        drv.clearErrors();           // ถ้าไม่อยาก clear ก็ลบทิ้งบรรทัดนี้ได้
-        drv.setState(desired_state); // ← ตอนนี้ชนิดตรงกับ API แล้ว
+        drv.clearErrors();
+        drv.setState(desired_state);
 
         uint32_t t0 = millis();
         while (millis() - t0 < settle_ms)
@@ -1094,23 +1456,16 @@ void all_odrives_closed()
 
 void wheels_set_velocity_mode()
 {
-    // สั่งให้ ODrive "ล้อ" เข้า VELOCITY_CONTROL + PASSTHROUGH
-    // (บางไลบรารีเรียก INPUT_MODE_PASSTHROUGH หรือ INPUT_MODE_PASSTHROUGH = 1)
     odrv_left_wheel.setControllerMode(CONTROL_MODE_VELOCITY_CONTROL, INPUT_MODE_PASSTHROUGH);
     odrv_right_wheel.setControllerMode(CONTROL_MODE_VELOCITY_CONTROL, INPUT_MODE_PASSTHROUGH);
-
-    // กันกระชากตอนสลับโหมด: ส่ง setpoint 0 หนึ่งครั้ง
     odrv_left_wheel.setVelocity(0.0f);
     odrv_right_wheel.setVelocity(0.0f);
 }
 
 void wheels_set_torque_mode()
 {
-    // สั่งให้ ODrive "ล้อ" เข้า TORQUE_CONTROL + PASSTHROUGH
     odrv_left_wheel.setControllerMode(CONTROL_MODE_TORQUE_CONTROL, INPUT_MODE_PASSTHROUGH);
     odrv_right_wheel.setControllerMode(CONTROL_MODE_TORQUE_CONTROL, INPUT_MODE_PASSTHROUGH);
-
-    // กันกระชาก: ส่ง torque 0 หนึ่งครั้ง
     odrv_left_wheel.setTorque(0.0f);
     odrv_right_wheel.setTorque(0.0f);
 }

@@ -186,3 +186,27 @@ nav_msgs__msg__Odometry Odometry::getData() const
 {
     return odom_msg_;
 }
+
+void Odometry::getWheelVelocities(float &left_mps, float &right_mps) const
+{
+    if (!has_omega_f_)
+    {
+        left_mps = 0.0f;
+        right_mps = 0.0f;
+        return;
+    }
+    left_mps = r_ * omega_l_f_;
+    right_mps = r_ * omega_r_f_;
+}
+
+void Odometry::getWheelOmegas(float &left_radps, float &right_radps) const
+{
+    if (!has_omega_f_)
+    {
+        left_radps = 0.0f;
+        right_radps = 0.0f;
+        return;
+    }
+    left_radps = omega_l_f_;
+    right_radps = omega_r_f_;
+}

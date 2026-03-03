@@ -45,6 +45,8 @@ public:
     float getX() const { return x_; }
     float getY() const { return y_; }
     float getYaw() const { return yaw_; }
+    void getWheelVelocities(float &left_mps, float &right_mps) const;
+    void getWheelOmegas(float &left_radps, float &right_radps) const;
 
 private:
     // helpers

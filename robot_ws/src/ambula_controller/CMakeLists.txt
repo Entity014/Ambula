@@ -100,6 +100,7 @@ install(PROGRAMS
   src/balance_control.py
   src/position_control.py
   src/wbc_node.py
+  src/teleop_node.py
   DESTINATION lib/${PROJECT_NAME}
 )
 

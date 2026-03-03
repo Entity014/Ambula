@@ -126,7 +126,7 @@ public:
 
         if (!bno086.begin(0x4A, Wire, -1, -1))
             return false;
-        if (!bno086.enableAccelerometer())
+        if (!bno086.enableLinearAccelerometer())
             return false;
         if (!bno086.enableGyroIntegratedRotationVector())
             return false;
@@ -153,10 +153,10 @@ public:
 
             switch (bno086.getSensorEventID())
             {
-            case SENSOR_REPORTID_ACCELEROMETER:
-                accel_.x = bno086.getAccelX();
-                accel_.y = bno086.getAccelY();
-                accel_.z = bno086.getAccelZ();
+            case SENSOR_REPORTID_LINEAR_ACCELERATION:
+                accel_.x = bno086.getLinAccelX();
+                accel_.y = bno086.getLinAccelY();
+                accel_.z = bno086.getLinAccelZ();
                 break;
 
             case SENSOR_REPORTID_GYRO_INTEGRATED_ROTATION_VECTOR:
