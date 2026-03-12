@@ -92,7 +92,17 @@
 
     <include>
         <uri>model://stair</uri>
-        <pose>3.5 -0.5 0 0 0 3.14</pose>
+        <name>stair_1</name> <pose>2.0 0.55 0 0 0 0</pose>
+    </include>
+
+    <include>
+        <uri>model://stair</uri>
+        <name>stair_2</name> <pose>2.0 1.0 0 0 0 1.57</pose>
+    </include>
+
+    <include>
+        <uri>model://stair</uri>
+        <name>stair_3</name> <pose>4.5 -2.0 0 0 0 3.14</pose>
     </include>
 
     <gravity>0 0 -9.8</gravity>

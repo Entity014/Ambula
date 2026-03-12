@@ -131,7 +131,7 @@ public:
         if (!bno086.enableGyroIntegratedRotationVector())
             return false;
 
-        Wire.setClock(300000); // increase I2C clock to 400kHz for better performance
+        // Wire.setClock(300000); // increase I2C clock to 400kHz for better performance
 
         return true;
     }

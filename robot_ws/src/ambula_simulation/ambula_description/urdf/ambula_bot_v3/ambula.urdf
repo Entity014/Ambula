@@ -8,7 +8,7 @@
   <link name="base_footprint"/>
   <link name="base_link">
     <visual>
-      <origin rpy="-1.5707963267948966 0 0" xyz="0 0 0"/>
+      <origin rpy="0 0 0" xyz="0 0 0"/>
       <geometry>
         <mesh filename="package://ambula_description/meshs/base.stl" scale="1 1 1"/>
       </geometry>
@@ -17,7 +17,7 @@
       </material>
     </visual>
     <collision>
-      <origin rpy="-1.5707963267948966 0 0" xyz="0 0 0"/>
+      <origin rpy="0 0 0" xyz="0 0 0"/>
       <geometry>
         <mesh filename="package://ambula_description/meshs/base.stl" scale="1 1 1"/>
       </geometry>
@@ -41,11 +41,11 @@
   <joint name="base_to_footprint" type="fixed">
     <parent link="base_footprint"/>
     <child link="base_link"/>
-    <origin rpy="0 0 0" xyz="0 0 0.5"/>
+    <origin rpy="0 0 0" xyz="0 0 0"/>
   </joint>
   <link name="left_waist_link">
     <visual>
-      <origin rpy="-1.5707963267948966 0 0" xyz="0 0 0"/>
+      <origin rpy="0 0 0" xyz="0 0 0"/>
       <geometry>
         <mesh filename="package://ambula_description/meshs/left_waist.stl" scale="1 1 1"/>
       </geometry>
@@ -54,7 +54,7 @@
       </material>
     </visual>
     <collision>
-      <origin rpy="-1.5707963267948966 0 0" xyz="0 0 0"/>
+      <origin rpy="0 0 0" xyz="0 0 0"/>
       <geometry>
         <mesh filename="package://ambula_description/meshs/left_waist.stl" scale="1 1 1"/>
       </geometry>
@@ -70,12 +70,12 @@
     <origin xyz="-0.05 0.0875 -0.1165"/>
     <parent link="base_link"/>
     <child link="left_waist_link"/>
-    <limit effort="1000" lower="-0.7853981633974483" upper="0.7853981633974483" velocity="10"/>
+    <limit effort="40" lower="-0.7853981633974483" upper="0.7853981633974483" velocity="10"/>
     <dynamics damping="5.0" friction="3.0"/>
   </joint>
   <link name="right_waist_link">
     <visual>
-      <origin rpy="-1.5707963267948966 0 0" xyz="0 0 0"/>
+      <origin rpy="0 0 0" xyz="0 0 0"/>
       <geometry>
         <mesh filename="package://ambula_description/meshs/right_waist.stl" scale="1 1 1"/>
       </geometry>
@@ -84,7 +84,7 @@
       </material>
     </visual>
     <collision>
-      <origin rpy="-1.5707963267948966 0 0" xyz="0 0 0"/>
+      <origin rpy="0 0 0" xyz="0 0 0"/>
       <geometry>
         <mesh filename="package://ambula_description/meshs/right_waist.stl" scale="1 1 1"/>
       </geometry>
@@ -100,12 +100,12 @@
     <origin xyz="-0.05 -0.0875 -0.1165"/>
     <parent link="base_link"/>
     <child link="right_waist_link"/>
-    <limit effort="1000" lower="-0.7853981633974483" upper="0.7853981633974483" velocity="10"/>
+    <limit effort="40" lower="-0.7853981633974483" upper="0.7853981633974483" velocity="10"/>
     <dynamics damping="5.0" friction="3.0"/>
   </joint>
   <link name="left_hip_link">
     <visual>
-      <origin rpy="-1.5707963267948966 0 0" xyz="0 0 0"/>
+      <origin rpy="0 0 0" xyz="0 0 0"/>
       <geometry>
         <mesh filename="package://ambula_description/meshs/left_hip.stl" scale="1 1 1"/>
       </geometry>
@@ -114,7 +114,7 @@
       </material>
     </visual>
     <collision>
-      <origin rpy="-1.5707963267948966 0 0" xyz="0 0 0"/>
+      <origin rpy="0 0 0" xyz="0 0 0"/>
       <geometry>
         <mesh filename="package://ambula_description/meshs/left_hip.stl" scale="1 1 1"/>
       </geometry>
@@ -130,12 +130,12 @@
     <origin xyz="0.0 0.055 0.0"/>
     <parent link="left_waist_link"/>
     <child link="left_hip_link"/>
-    <limit effort="1000" lower="0.9599310885968811" upper="3.141592653589793" velocity="10"/>
+    <limit effort="40" lower="0.9599310885968811" upper="3.141592653589793" velocity="10"/>
     <dynamics damping="5.0" friction="3.0"/>
   </joint>
   <link name="right_hip_link">
     <visual>
-      <origin rpy="-1.5707963267948966 0 0" xyz="0 0 0"/>
+      <origin rpy="0 0 0" xyz="0 0 0"/>
       <geometry>
         <mesh filename="package://ambula_description/meshs/right_hip.stl" scale="1 1 1"/>
       </geometry>
@@ -144,7 +144,7 @@
       </material>
     </visual>
     <collision>
-      <origin rpy="-1.5707963267948966 0 0" xyz="0 0 0"/>
+      <origin rpy="0 0 0" xyz="0 0 0"/>
       <geometry>
         <mesh filename="package://ambula_description/meshs/right_hip.stl" scale="1 1 1"/>
       </geometry>
@@ -160,12 +160,12 @@
     <origin xyz="0.0 -0.055 0.0"/>
     <parent link="right_waist_link"/>
     <child link="right_hip_link"/>
-    <limit effort="1000" lower="0.9599310885968811" upper="3.141592653589793" velocity="10"/>
+    <limit effort="40" lower="0.9599310885968811" upper="3.141592653589793" velocity="10"/>
     <dynamics damping="5.0" friction="3.0"/>
   </joint>
   <link name="left_knee_link">
     <visual>
-      <origin rpy="-1.5707963267948966 0 0" xyz="0 0 0"/>
+      <origin rpy="0 0 0" xyz="0 0 0"/>
       <geometry>
         <mesh filename="package://ambula_description/meshs/left_knee.stl" scale="1 1 1"/>
       </geometry>
@@ -174,7 +174,7 @@
       </material>
     </visual>
     <collision>
-      <origin rpy="-1.5707963267948966 0 0" xyz="0 0 0"/>
+      <origin rpy="0 0 0" xyz="0 0 0"/>
       <geometry>
         <mesh filename="package://ambula_description/meshs/left_knee.stl" scale="1 1 1"/>
       </geometry>
@@ -190,12 +190,12 @@
     <origin xyz="-0.015 0.0 0.201"/>
     <parent link="left_hip_link"/>
     <child link="left_knee_link"/>
-    <limit effort="1000" lower="1.2217304763960306" upper="2.530727415391778" velocity="10"/>
+    <limit effort="40" lower="1.2217304763960306" upper="2.530727415391778" velocity="10"/>
     <dynamics damping="5.0" friction="3.0"/>
   </joint>
   <link name="right_knee_link">
     <visual>
-      <origin rpy="-1.5707963267948966 0 0" xyz="0 0 0"/>
+      <origin rpy="0 0 0" xyz="0 0 0"/>
       <geometry>
         <mesh filename="package://ambula_description/meshs/right_knee.stl" scale="1 1 1"/>
       </geometry>
@@ -204,7 +204,7 @@
       </material>
     </visual>
     <collision>
-      <origin rpy="-1.5707963267948966 0 0" xyz="0 0 0"/>
+      <origin rpy="0 0 0" xyz="0 0 0"/>
       <geometry>
         <mesh filename="package://ambula_description/meshs/right_knee.stl" scale="1 1 1"/>
       </geometry>
@@ -220,12 +220,12 @@
     <origin xyz="-0.015 0.0 0.201"/>
     <parent link="right_hip_link"/>
     <child link="right_knee_link"/>
-    <limit effort="1000" lower="1.2217304763960306" upper="2.530727415391778" velocity="10"/>
+    <limit effort="40" lower="1.2217304763960306" upper="2.530727415391778" velocity="10"/>
     <dynamics damping="5.0" friction="3.0"/>
   </joint>
   <link name="left_wheel_link">
     <visual>
-      <origin rpy="-1.5707963267948966 0 0" xyz="0 0 0"/>
+      <origin rpy="0 0 0" xyz="0 0 0"/>
       <geometry>
         <mesh filename="package://ambula_description/meshs/wheel.stl" scale="1 1 1"/>
       </geometry>
@@ -234,7 +234,7 @@
       </material>
     </visual>
     <collision>
-      <origin rpy="-1.5707963267948966 0 0" xyz="0 0 0"/>
+      <origin rpy="0 0 0" xyz="0 0 0"/>
       <geometry>
         <mesh filename="package://ambula_description/meshs/wheel.stl" scale="1 1 1"/>
       </geometry>
@@ -254,7 +254,7 @@
   </joint>
   <link name="right_wheel_link">
     <visual>
-      <origin rpy="-1.5707963267948966 0 0" xyz="0 0 0"/>
+      <origin rpy="0 0 0" xyz="0 0 0"/>
       <geometry>
         <mesh filename="package://ambula_description/meshs/wheel.stl" scale="1 1 1"/>
       </geometry>
@@ -263,7 +263,7 @@
       </material>
     </visual>
     <collision>
-      <origin rpy="-1.5707963267948966 0 0" xyz="0 0 0"/>
+      <origin rpy="0 0 0" xyz="0 0 0"/>
       <geometry>
         <mesh filename="package://ambula_description/meshs/wheel.stl" scale="1 1 1"/>
       </geometry>
@@ -363,7 +363,7 @@
     <sensor name="imu_sensor" type="imu">
       <pose relative_to="base_link">0 0 0 0 0 0</pose>
       <always_on>1</always_on>
-      <update_rate>1000.0</update_rate>
+      <update_rate>40.0</update_rate>
       <topic>imu</topic>
       <gz_frame_id>imu_base_link</gz_frame_id>
     </sensor>
@@ -402,7 +402,7 @@
     <sensor name="imu_sensor" type="imu">
       <pose relative_to="base_link">0 0 0 0 0 0</pose>
       <always_on>1</always_on>
-      <update_rate>1000.0</update_rate>
+      <update_rate>40.0</update_rate>
       <topic>imu</topic>
       <gz_frame_id>imu_cam_link</gz_frame_id>
     </sensor>

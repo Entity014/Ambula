@@ -6,7 +6,6 @@
   <xacro:include filename="$(find ambula_description)/urdf/ambula_bot_v3/robot/hip.urdf.xacro" />
   <xacro:include filename="$(find ambula_description)/urdf/ambula_bot_v3/robot/knee.urdf.xacro" />
   <xacro:include filename="$(find ambula_description)/urdf/ambula_bot_v3/robot/wheel.urdf.xacro" />
-  <xacro:include filename="$(find ambula_description)/urdf/ambula_bot_v3/robot/passive_wheel.urdf.xacro" />
   
   <!-- Robot -->
   <xacro:base length="${base_length}" width="${base_width}" height="${base_height}" mass="${base_mass}"/>

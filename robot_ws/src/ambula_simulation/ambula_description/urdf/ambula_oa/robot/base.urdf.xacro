@@ -39,10 +39,13 @@
             </visual>
         </gazebo>
 
-        <joint name="world_to_base" type="fixed">
+        <joint name="world_to_base" type="prismatic">
             <origin rpy="0 0 0" xyz="0 0 0" />
+            <axis xyz="0 1 0" />
             <parent link="world" />
             <child link="base_link" />
+            <limit effort="100" lower="-2.5" upper="2.5" velocity="10" />
+            <dynamics damping="10.0" friction="5.0" />
         </joint>
 
     </xacro:macro>

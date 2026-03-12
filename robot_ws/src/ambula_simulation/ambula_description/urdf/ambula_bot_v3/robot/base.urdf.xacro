@@ -1,8 +1,9 @@
 <?xml version="1.0"?>
 <robot xmlns:xacro="http://www.ros.org/wiki/xacro">
     <xacro:macro name="base" params="length width height mass">
-        <!-- <link name="world" /> -->
-        <link name="base_footprint"/>
+        <link name="world" />
+        <!-- <link name="base_footprint"/> -->
+        
 
         <link name="base_link">
             <visual>
@@ -40,8 +41,8 @@
             </visual>
         </gazebo>
 
-        <joint name="base_to_footprint" type="fixed">
-            <parent link="base_footprint" />
+        <joint name="base_to_world" type="fixed">
+            <parent link="world" />
             <child link="base_link" />
             <origin rpy="0 0 0" xyz="0 0 0.5" />
         </joint>

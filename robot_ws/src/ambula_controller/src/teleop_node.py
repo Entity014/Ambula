@@ -207,7 +207,7 @@ class JoyToCmdVel(Node):
 
         # State Z logic
         if self._rising(joy, int(self.get_parameter("z_cycle_btn").value)):
-            self.state_z = (self.state_z + 1) % 3
+            self.state_z = (self.state_z + 1) % 2
 
     def _publish_state(self):
         robot_msg = Int8()

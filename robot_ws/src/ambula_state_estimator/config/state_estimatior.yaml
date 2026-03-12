@@ -1,0 +1,12 @@
+state_vector:
+  ros__parameters:
+    imu_euler_topic: /imu/data_raw/euler
+    odom_topic: /odom/unfiltered
+    height_topic: /ambula/height
+    out_topic: /ambula/state/estimation
+
+    frame_id: base_link
+    publish_hz: 100.0
+
+    use_speed_magnitude: false
+    require_all_inputs: true

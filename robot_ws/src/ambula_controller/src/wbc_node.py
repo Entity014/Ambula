@@ -15,6 +15,7 @@ from ambula_controller.wbc_core import (
     load_model,
     build_actuation_selection,
     IK_CONTROLLED_JOINTS,
+    require_frame_id
 )
 
 try:
@@ -36,7 +37,6 @@ def get_quaternion_from_gravity(q_raw_xyzw):
     """
     x, y, z, w = q_raw_xyzw
 
-    # Gravity vector in body frame (ตามสูตรเดิมของคุณ)
     gx = 2.0 * (x * z - w * y)
     gy = 2.0 * (w * x + y * z)
     gz = w * w - x * x - y * y + z * z
@@ -45,10 +45,7 @@ def get_quaternion_from_gravity(q_raw_xyzw):
     if n < 1e-9:
         return np.array([0.0, 0.0, 0.0, 1.0], dtype=float)
 
-    # ต้องการ "ขึ้น" (up) ใน frame ของหุ่น
     up_body = np.array([-gx/n, -gy/n, -gz/n], dtype=float)
-
-    # สร้าง quaternion หมุนจาก world_z ไป up_body (ไม่มี yaw)
     world_z = np.array([0.0, 0.0, -1.0], dtype=float)
     q_aligned = pin.Quaternion.FromTwoVectors(world_z, up_body)
     return np.array([q_aligned.x, q_aligned.y, q_aligned.z, q_aligned.w], dtype=float)
@@ -99,15 +96,10 @@ class AmbulaWBCNode(Node):
         self.declare_parameter('publish_all_joints', True)
         self.declare_parameter('non_actuated_effort_mode', 'zero')
 
-        # --- NEW: State source ---
-        # state_source:
-        #   - "ekf": ใช้ Odometry ที่ฟิวส์แล้ว (เช่น /odometry/filtered) -> เอา pose.orientation + twist.angular มาใช้ด้วย
-        #   - "raw": ใช้ IMU raw (gravity-align) + odom (position + linear vel)
+        # --- State source ---
         self.declare_parameter('state_source', 'ekf')  # 'ekf' or 'raw'
         self.declare_parameter('odom_topic', '/odom')
         self.declare_parameter('imu_topic', '/imu/data_raw')
-
-        # ถ้าใช้ raw gravity-align แล้วอยาก “ไม่เอา gyro z” (ลด inconsistency yaw)
         self.declare_parameter('raw_zero_gyro_z', False)
 
         # WBC Weights / Gains
@@ -126,7 +118,7 @@ class AmbulaWBCNode(Node):
         self.declare_parameter('kd_knee',  14.0)
 
         # Hardware params
-        self.declare_parameter('tau_limit',     40.0)
+        self.declare_parameter('tau_limit',     35.0)
         self.declare_parameter('friction_mu',    0.6)
         self.declare_parameter('tau_limits',     [])
         self.declare_parameter('tau_override',   "")
@@ -137,7 +129,7 @@ class AmbulaWBCNode(Node):
 
         # Standup / Boost
         self.declare_parameter('standup_enable', False)
-        self.declare_parameter('standup_height', 0.30)
+        self.declare_parameter('standup_height', 0.35)
         self.declare_parameter('standup_duration', 1.2)
 
         self.declare_parameter('height_boost_enable', True)
@@ -156,9 +148,23 @@ class AmbulaWBCNode(Node):
         self.declare_parameter('knee_spring_sign_left',  1.0)
         self.declare_parameter('knee_spring_sign_right', 1.0)
 
+        # NEW: Hip Spring
+        self.declare_parameter('hip_spring_k',           2.0)
+        self.declare_parameter('hip_spring_b',           0.3)
+        self.declare_parameter('hip_spring_q0_left',     1.57)
+        self.declare_parameter('hip_spring_q0_right',    1.57)
+        self.declare_parameter('hip_spring_sign_left',   1.0)
+        self.declare_parameter('hip_spring_sign_right',  1.0)
+
+        # NEW: Hip Gravity Compensation
+        # 0.0 = off, 0.5-0.8 = recommended range
+        self.declare_parameter('hip_grav_comp_scale',    0.6)
+
         # Robustness
         self.declare_parameter('w_roll_slack', 1e4)
         self.declare_parameter('alpha_bg',     20.0)
+        # NOTE: w_dyn_slack default lowered to 500 (was 1e4)
+        self.declare_parameter('w_dyn_slack',  500.0)
 
         # ======================================================
         # Initialization
@@ -178,13 +184,13 @@ class AmbulaWBCNode(Node):
         self.q_current = pin.neutral(self.model)
         self.u_current = np.zeros(self.model.nv)
 
-        self.imu_ready   = (self.state_source == 'ekf')  # ekf mode ไม่ต้องรอ imu topic
+        self.imu_ready   = (self.state_source == 'ekf')
         self.odom_ready  = False
         self.joint_ready = False
 
-        self.target_base_height = 0.18
-        self.current_z_ref = 0.18
-        self.target_X = -0.03
+        self.target_base_height = 0.35
+        self.current_z_ref = 0.35
+        self.target_X = -0.05
 
         self._stand_t0 = None
         self._stand_h0 = None
@@ -232,7 +238,6 @@ class AmbulaWBCNode(Node):
         # ======================================================
         self.sub_odom = self.create_subscription(Odometry, self.odom_topic, self.odom_callback, 50)
 
-        # raw mode เท่านั้นถึง subscribe IMU
         if self.state_source == 'raw':
             self.sub_imu = self.create_subscription(Imu, self.imu_topic, self.imu_callback, 200)
             self.get_logger().info(f"[WBC] state_source=raw | odom={self.odom_topic} imu={self.imu_topic}")
@@ -250,7 +255,6 @@ class AmbulaWBCNode(Node):
     # CALLBACKS
     # ======================================================
     def imu_callback(self, msg: Imu):
-        # ใช้เฉพาะ raw mode
         q_raw = [msg.orientation.x, msg.orientation.y, msg.orientation.z, msg.orientation.w]
         q_aligned = get_quaternion_from_gravity(q_raw)
         self.q_current[3:7] = _quat_normalize_xyzw(q_aligned)
@@ -267,32 +271,34 @@ class AmbulaWBCNode(Node):
         self.imu_ready = True
 
     def odom_callback(self, msg: Odometry):
-        # position
         p = msg.pose.pose.position
         self.q_current[0:3] = [p.x, p.y, p.z]
 
-        # linear vel
         v = msg.twist.twist.linear
         self.u_current[0:3] = [v.x, v.y, v.z]
 
         if self.state_source == 'ekf':
-            # orientation from fused odom (EKF output)
             oq = msg.pose.pose.orientation
             self.q_current[3:7] = _quat_normalize_xyzw([oq.x, oq.y, oq.z, oq.w])
-
-            # angular velocity from fused odom (EKF output)
+            self.q_current[3:7] = _quat_normalize_xyzw([0.0, 0.0, oq.z, oq.w])
             w = msg.twist.twist.angular
             self.u_current[3:6] = [w.x, w.y, w.z]
-
-            # ekf mode: ไม่ต้องรอ imu callback
+            self.u_current[3:6] = [0.0, 0.0, w.z]
             self.imu_ready = True
 
         self.odom_ready = True
 
     def cmd_vel_callback(self, msg: Twist):
-        # ใช้ linear.z เป็น “command height” ตามเดิมของคุณ
         if abs(msg.linear.z) > 0.05:
-            new_h = float(np.clip(msg.linear.z, self.leg_ik.L_MIN_REACHABLE, self.leg_ik.L_MAX_REACHABLE))
+            wheel_radius   = 0.07
+            base_to_hip_z  = 0.1165
+            total_offset   = wheel_radius + base_to_hip_z
+
+            min_base_h = self.leg_ik.L_MIN_REACHABLE + total_offset
+            max_base_h = self.leg_ik.L_MAX_REACHABLE + total_offset
+
+            new_h = float(np.clip(msg.linear.z, min_base_h, max_base_h))
+
             if new_h > self.target_base_height + 1e-4:
                 self._boost_t0 = self.get_clock().now()
             self.target_base_height = new_h
@@ -312,7 +318,7 @@ class AmbulaWBCNode(Node):
                 if nq == 1:
                     self.q_current[iq] = pos
                 elif nq == 2:
-                    self.q_current[iq] = float(np.cos(pos))
+                    self.q_current[iq]     = float(np.cos(pos))
                     self.q_current[iq + 1] = float(np.sin(pos))
 
             if len(msg.velocity) > i:
@@ -351,25 +357,59 @@ class AmbulaWBCNode(Node):
         q, u = self.q_current.copy(), self.u_current.copy()
         self._refresh_posture_ref_from_current(q)
 
-        # IK reference (hip/knee)
-        q_hip_l, q_knee_l = self.leg_ik.compute(self.target_X, -self.current_z_ref)
+        # ── Height debug log ──────────────────────────────────────────────────
+        pin.forwardKinematics(self.model, self.data, q)
+        pin.updateFramePlacements(self.model, self.data)
+
+        wheel_radius  = 0.07
+        base_to_hip_z = 0.1165
+
+        try:
+            base_fid  = require_frame_id(self.model, "base_link")
+            wheel_fid = require_frame_id(self.model, "left_wheel_link")
+            base_z_kin  = self.data.oMf[base_fid].translation[2]
+            wheel_z_kin = self.data.oMf[wheel_fid].translation[2]
+            true_base_height = (base_z_kin - wheel_z_kin) + wheel_radius
+        except Exception:
+            true_base_height = 0.0
+
+        z_ik_target = self.current_z_ref - wheel_radius - base_to_hip_z
+
+        self.get_logger().info(
+            f"\n[WBC Z-Check] Target={self.current_z_ref:.4f}m | "
+            f"Current(kin)={true_base_height:.4f}m | IK(Hip->Wheel)={z_ik_target:.4f}m",
+            throttle_duration_sec=0.5,
+        )
+
+        # ── IK reference ─────────────────────────────────────────────────────
+        q_hip_l, q_knee_l = self.leg_ik.compute(self.target_X, -z_ik_target)
 
         self.set_q_ref_actuated("left_hip_joint",   q_hip_l)
         self.set_q_ref_actuated("left_knee_joint",  q_knee_l)
+        self.set_q_ref_actuated("right_hip_joint",  q_hip_l)
+        self.set_q_ref_actuated("right_knee_joint", q_knee_l)
 
-        self.set_q_ref_actuated("right_hip_joint",  q_hip_l)      # หรือ -q_hip_l ถ้าต้องการ
-        self.set_q_ref_actuated("right_knee_joint", q_knee_l)    # ← flip ตรงนี้สำคัญ
+        # Update hip spring q0 to track IK target in real time
+        # This prevents the spring from fighting the IK reference.
+        # Comment this out if you want a fixed q0 from the YAML.
+        # self.set_parameter(rclpy.parameter.Parameter(
+        #     'hip_spring_q0_left',  rclpy.parameter.Parameter.Type.DOUBLE, q_hip_l))
+        # self.set_parameter(rclpy.parameter.Parameter(
+        #     'hip_spring_q0_right', rclpy.parameter.Parameter.Type.DOUBLE, q_hip_l))
 
-        # Boost / Regular
+        # ── Boost / Regular gains ─────────────────────────────────────────────
         w_height_base = float(self.get_parameter('weight_height').value)
-        kp_z_base = float(self.get_parameter('kp_z').value)
-        kd_z_base = float(self.get_parameter('kd_z').value)
-        zdd_clip_use = 8.0
-        knee_tau_scale_use = float(self.get_parameter('knee_tau_scale').value)
-        tau_override = self._build_tau_override_dict()
+        kp_z_base     = float(self.get_parameter('kp_z').value)
+        kd_z_base     = float(self.get_parameter('kd_z').value)
+        zdd_clip_use          = 8.0
+        knee_tau_scale_use    = float(self.get_parameter('knee_tau_scale').value)
+        tau_override          = self._build_tau_override_dict()
 
-        if self._boost_active() or (bool(self.get_parameter('standup_enable').value) and not self._stand_done):
-            kp_z_use = kp_z_base * float(self.get_parameter('height_boost_kp_mult').value)
+        boosting = self._boost_active() or (
+            bool(self.get_parameter('standup_enable').value) and not self._stand_done
+        )
+        if boosting:
+            kp_z_use     = kp_z_base * float(self.get_parameter('height_boost_kp_mult').value)
             w_height_use = w_height_base * float(self.get_parameter('height_boost_w_mult').value)
             zdd_clip_use = float(self.get_parameter('height_boost_zdd_clip').value)
             knee_tau_scale_use = float(self.get_parameter('height_boost_knee_tau_scale').value)
@@ -381,20 +421,24 @@ class AmbulaWBCNode(Node):
             kp_z_use, w_height_use = kp_z_base, w_height_base
 
         params = {
-            'w_height': w_height_use,
-            'w_roll': float(self.get_parameter('weight_roll').value),
+            'w_height':  w_height_use,
+            'w_roll':    float(self.get_parameter('weight_roll').value),
             'w_posture': float(self.get_parameter('weight_posture').value),
 
-            'kp_z': kp_z_use, 'kd_z': kd_z_base,
-            'kp_roll': float(self.get_parameter('kp_roll').value), 'kd_roll': float(self.get_parameter('kd_roll').value),
+            'kp_z':    kp_z_use,
+            'kd_z':    kd_z_base,
+            'kp_roll': float(self.get_parameter('kp_roll').value),
+            'kd_roll': float(self.get_parameter('kd_roll').value),
 
-            'kp_hip': float(self.get_parameter('kp_hip').value), 'kd_hip': float(self.get_parameter('kd_hip').value),
-            'kp_knee': float(self.get_parameter('kp_knee').value), 'kd_knee': float(self.get_parameter('kd_knee').value),
+            'kp_hip':  float(self.get_parameter('kp_hip').value),
+            'kd_hip':  float(self.get_parameter('kd_hip').value),
+            'kp_knee': float(self.get_parameter('kp_knee').value),
+            'kd_knee': float(self.get_parameter('kd_knee').value),
 
-            'tau_limit': float(self.get_parameter('tau_limit').value),
-            'mu': float(self.get_parameter('friction_mu').value),
+            'tau_limit':  float(self.get_parameter('tau_limit').value),
+            'mu':         float(self.get_parameter('friction_mu').value),
 
-            'zdd_clip': float(zdd_clip_use),
+            'zdd_clip':   float(zdd_clip_use),
         }
 
         try:
@@ -409,12 +453,14 @@ class AmbulaWBCNode(Node):
 
                 alpha_bg=float(self.get_parameter('alpha_bg').value),
                 w_roll_slack=float(self.get_parameter('w_roll_slack').value),
+                w_dyn_slack=float(self.get_parameter('w_dyn_slack').value),  # ← now tunable
 
                 knee_tau_scale=float(knee_tau_scale_use),
                 hip_tau_scale=float(self.get_parameter('hip_tau_scale').value),
                 waist_tau_scale=float(self.get_parameter('waist_tau_scale').value),
                 posture_qdd_clip=float(self.get_parameter('posture_qdd_clip').value),
 
+                # Knee spring
                 knee_spring_k=float(self.get_parameter('knee_spring_k').value),
                 knee_spring_b=float(self.get_parameter('knee_spring_b').value),
                 knee_spring_q0_left=float(self.get_parameter('knee_spring_q0_left').value),
@@ -422,9 +468,19 @@ class AmbulaWBCNode(Node):
                 knee_spring_sign_left=float(self.get_parameter('knee_spring_sign_left').value),
                 knee_spring_sign_right=float(self.get_parameter('knee_spring_sign_right').value),
 
+                # NEW: Hip spring
+                hip_spring_k=float(self.get_parameter('hip_spring_k').value),
+                hip_spring_b=float(self.get_parameter('hip_spring_b').value),
+                hip_spring_q0_left=float(self.get_parameter('hip_spring_q0_left').value),
+                hip_spring_q0_right=float(self.get_parameter('hip_spring_q0_right').value),
+                hip_spring_sign_left=float(self.get_parameter('hip_spring_sign_left').value),
+                hip_spring_sign_right=float(self.get_parameter('hip_spring_sign_right').value),
+
+                # NEW: Hip gravity compensation
+                hip_grav_comp_scale=float(self.get_parameter('hip_grav_comp_scale').value),
+
                 **params
             ))
-            
 
             self._publish_commands(out)
 
@@ -436,32 +492,52 @@ class AmbulaWBCNode(Node):
     # Helpers
     # ======================================================
     def _publish_commands(self, wbc_output):
-        publish_all = bool(self.get_parameter('publish_all_joints').value)
-        non_act_val = (float('nan')
-                       if str(self.get_parameter('non_actuated_effort_mode').value).strip().lower() == 'nan'
-                       else 0.0)
-
         cmd = JointState()
         cmd.header.stamp = self.get_clock().now().to_msg()
+        cmd.header.frame_id = "base_link"
 
-        tau_map = {name: float(wbc_output['tau'][i]) for i, name in enumerate(wbc_output['actuated_names'])}
-        qref_map = {a["name"]: float(self.q_ref_actuated[a["act_idx"]]) for a in self.actuated}
+        target_names = [
+            "left_waist_joint",
+            "left_hip_joint",
+            "left_knee_joint",
+            "left_wheel_joint",
+            "right_waist_joint",
+            "right_hip_joint",
+            "right_knee_joint",
+            "right_wheel_joint",
+        ]
+        cmd.name = target_names
 
-        cmd.name = self.all_joint_names if publish_all else self.actuated_names
-        cmd.effort = [tau_map.get(n, non_act_val if publish_all else 0.0) for n in cmd.name]
-        cmd.position = [qref_map.get(n, 0.0) for n in cmd.name]
-        cmd.velocity = [0.0] * len(cmd.name)
+        tau_map  = {name: float(wbc_output['tau'][i])
+                    for i, name in enumerate(wbc_output['actuated_names'])}
+        qref_map = {a["name"]: float(self.q_ref_actuated[a["act_idx"]])
+                    for a in self.actuated}
+
+        cmd.position = []
+        cmd.velocity = []
+        cmd.effort   = []
+
+        for name in target_names:
+            cmd.position.append(qref_map.get(name, 0.0))
+            cmd.velocity.append(0.0)
+            cmd.effort.append(tau_map.get(name, 0.0))
 
         self.pub_joint_commands.publish(cmd)
 
     def _publish_emergency_stop(self):
         cmd = JointState()
         cmd.header.stamp = self.get_clock().now().to_msg()
-        names = self.all_joint_names if bool(self.get_parameter('publish_all_joints').value) else self.actuated_names
-        cmd.name = names
-        cmd.effort = [0.0] * len(names)
-        cmd.position = [0.0] * len(names)
-        cmd.velocity = [0.0] * len(names)
+        cmd.header.frame_id = "base_link"
+
+        target_names = [
+            "left_waist_joint",  "left_hip_joint",  "left_knee_joint",  "left_wheel_joint",
+            "right_waist_joint", "right_hip_joint", "right_knee_joint", "right_wheel_joint",
+        ]
+        cmd.name     = target_names
+        cmd.position = [0.0] * 8
+        cmd.velocity = [0.0] * 8
+        cmd.effort   = [0.0] * 8
+
         self.pub_joint_commands.publish(cmd)
 
     def _apply_startup_standup(self):
@@ -473,14 +549,14 @@ class AmbulaWBCNode(Node):
             self._stand_h0 = float(self.target_base_height)
 
         dur = max(float(self.get_parameter('standup_duration').value), 1e-6)
-        s = _smoothstep01((now_s - self._stand_t0) / dur)
+        s   = _smoothstep01((now_s - self._stand_t0) / dur)
 
         h_target = float(self.get_parameter('standup_height').value)
         self.target_base_height = float(self._stand_h0 + s * (h_target - self._stand_h0))
 
         if s >= 1.0:
             self._stand_done = True
-            self._stand_t0 = None
+            self._stand_t0   = None
 
     def _boost_active(self) -> bool:
         if not bool(self.get_parameter('height_boost_enable').value) or self._boost_t0 is None:

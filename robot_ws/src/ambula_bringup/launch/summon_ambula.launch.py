@@ -29,9 +29,9 @@ def generate_launch_description():
     pkg_path = os.path.join(get_package_share_directory("ambula_description"))
     ambula_desc_path = os.path.join(get_package_share_directory("ambula_description"))
 
-    bridge_path = os.path.join(pkg_path, "config", "gazebo_bridge.yaml")
+    bridge_path = os.path.join(pkg_path, "config", "gazebo_bridge_oa.yaml")
 
-    xacro_file = os.path.join(ambula_desc_path, "urdf/ambula_bot/", "ambula.urdf.xacro")
+    xacro_file = os.path.join(ambula_desc_path, "urdf/ambula_oa/", "ambula.urdf.xacro")
     robot_description_config = xacro.process_file(xacro_file)
 
     # Create a robot_state_publisher node

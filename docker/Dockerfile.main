@@ -66,6 +66,8 @@ RUN apt-get update && apt-get install -y \
     ros-${ROS_DISTRO}-pcl-conversions \
     ros-${ROS_DISTRO}-cv-bridge \
     ros-${ROS_DISTRO}-vision-opencv \
+    ros-${ROS_DISTRO}-spatio-temporal-voxel-layer \
+    ros-$ROS_DISTRO-rtabmap-ros \
     # --- RealSense ROS wrapper (ไม่ต้อง dkms ใน container) ---
     ros-${ROS_DISTRO}-librealsense2* \
     ros-${ROS_DISTRO}-realsense2-* \
@@ -83,7 +85,7 @@ RUN curl -fsSL https://packages.osrfoundation.org/gazebo.gpg \
 
 # ========== Python deps ==========
 RUN pip3 install --no-cache-dir --break-system-packages --ignore-installed \
-    sympy transforms3d pyproj matplotlib evdev pandas "numpy<2" pin osqp
+    sympy transforms3d pyproj matplotlib evdev pandas "numpy<2" pin "osqp>=0.6.3"
 
 # ========== CycloneDDS ==========
 ENV RMW_IMPLEMENTATION=rmw_cyclonedds_cpp

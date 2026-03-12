@@ -117,7 +117,7 @@ rcl_timer_t control_timer, feedback_timer;
 rcl_init_options_t init_options;
 
 unsigned long long time_offset = 0;
-unsigned long prev_cmd_time = 0, payload_pulse_start_ms = 0;
+unsigned long prev_cmd_time = 0, payload_pulse_start_ms = 0, led_step_start_ms = 0;
 
 enum connection_states
 {
@@ -149,11 +149,14 @@ bool payload_pulsing = false;
 enum light_states
 {
     TURN_ON,
-    BLINK,
     TURN_OFF,
 } light_state;
 
 light_states prev_light_state = TURN_ON;
+
+int led_step = 0;
+int led_total_steps = 0;
+bool led_running = false;
 
 Kinematics kinematics(
     Kinematics::DIFFERENTIAL_DRIVE,
@@ -250,8 +253,8 @@ struct LqrGains
 
 // Default Gains (ตัวแปรที่ 5 คือตัวแก้หน้าหนัก)
 static volatile LqrGains K_sched = {
-    -3.218869f, -0.373025f, -0.395204f, -0.000000f, -0.115470f,
-    -0.000000f, -0.000000f, -0.000000f, 0.076095f, -0.000000f};
+    -6.901328f, -0.811440f, -1.064901f, 0.000000f, -0.547723f,
+    -0.000000f, -0.000000f, -0.000000f, 0.109902f, -0.000000f};
 
 static inline float lerp(float a, float b, float t) { return a + (b - a) * t; }
 
@@ -372,17 +375,20 @@ void lqr_isr()
     // Calculate LQI Control Action (u = -Kx)
     // ------------------------------------
     // สังเกตว่าเราไม่ใช้ pitch_ref เลี้ยงวงนอกแล้ว ให้ x0 = theta ไปเลย
-    float x0 = theta - (0.05f);
+    float x0 = theta - 0.05f;
     float x1 = -theta_dot;
     float x2 = v_error;
     float x3 = (r_imu - rref);
     float x4 = lqi_integral_vel; // State 5 เพิ่มเข้ามา
 
-    float tau_fwd = -(Klocal.k00 * x0 + Klocal.k01 * x1 + Klocal.k02 * x2 + Klocal.k03 * x3 + Klocal.k04 * x4);
-    float tau_yaw = -(Klocal.k10 * x0 + Klocal.k11 * x1 + Klocal.k12 * x2 + Klocal.k13 * x3 + Klocal.k14 * x4);
+    float u_fwd = -(Klocal.k00 * x0 + Klocal.k01 * x1 + Klocal.k02 * x2 + Klocal.k03 * x3 + Klocal.k04 * x4);
+    float u_yaw = -(Klocal.k10 * x0 + Klocal.k11 * x1 + Klocal.k12 * x2 + Klocal.k13 * x3 + Klocal.k14 * x4);
 
-    float tauL = tau_fwd - tau_yaw;
-    float tauR = tau_fwd + tau_yaw;
+    float tau_fwd_per_wheel = u_fwd / 2.0f;
+    float tau_yaw_per_wheel = u_yaw / 2.0f;
+
+    float tauL = tau_fwd_per_wheel - tau_yaw_per_wheel;
+    float tauR = tau_fwd_per_wheel + tau_yaw_per_wheel;
 
     // ================== Slip Compensation ==================
     float diff_vel = (vr - vl) - (rref * LR_WHEELS_DISTANCE);
@@ -572,6 +578,7 @@ void setup()
             flashLED(3);
         }
     }
+    servoActuator.setServoAngle(LED_CH, 0.0f);
 
     if (!setupCan())
     {
@@ -725,9 +732,6 @@ void ledCommandCallback(const void *msgin)
     case TURN_ON:
         light_state = TURN_ON;
         break;
-    case BLINK:
-        light_state = BLINK;
-        break;
     case TURN_OFF:
         light_state = TURN_OFF;
         break;
@@ -834,38 +838,114 @@ void moveBase()
 
     if (robot_state == SLIDE)
     {
-        float left_hip_turns = ((2.0 * dir_sign(maps[0].direction)) - maps[0].pos_offset_rad) / maps[0].pos_scale;
+        // --- 1. กำหนดพารามิเตอร์ Impedance (Virtual Spring-Damper) ---
+        float Kp_imp = 1.5f; // ความแข็งของสปริงช่วยดึง (Nm/rad)
+        float Kd_imp = 0.2f; // ความหนืดต้านการกระตุก (Nm/(rad/s))
+
+        // ** ลิมิตแรงบิดสูงสุด (Clamp Max Torque) **
+        // ป้องกันไม่ให้ Feedforward จ่ายกระแสเกินพิกัดของ ODrive (ปรับหน่วยเป็น Nm)
+        float max_assist_torque = 1.0f;
+
+        // กำหนดมุมเป้าหมาย (Radians)
+        float target_hip_rad = 2.0f;
+        float target_knee_rad = 2.408554368f;
+
+        // --- 2. ฟังก์ชันคำนวณ Torque Feedforward พร้อมทำ Clamp ---
+        auto calc_impedance_torque = [&](int joint_idx, float target_rad) -> float
+        {
+            float current_rad = joint_state_msg.position.data[joint_idx];
+            float current_vel = joint_state_msg.velocity.data[joint_idx];
+
+            // สมการ Impedance: tau = Kp*error - Kd*velocity
+            float error = target_rad - current_rad;
+            float tau = (Kp_imp * error) - (Kd_imp * current_vel);
+
+            // แปลงทิศทาง Torque ให้ตรงกับทิศทางการหมุนของมอเตอร์
+            const float s = dir_sign(maps[joint_idx].direction);
+            tau *= s;
+            if (maps[joint_idx].flip)
+            {
+                tau = -tau;
+            }
+
+            // ** CLAMP MAX TORQUE ตรงนี้ครับ **
+            return clampf(tau, -max_assist_torque, max_assist_torque);
+        };
+
+        // --- 3. คำนวณ Feedforward Torque สำหรับแต่ละข้อต่อ ---
+        float tau_ff_lh = -calc_impedance_torque(J_LEFT_HIP, target_hip_rad);
+        float tau_ff_lk = calc_impedance_torque(J_LEFT_KNEE, target_knee_rad);
+        float tau_ff_rh = calc_impedance_torque(J_RIGHT_HIP, target_hip_rad);
+        float tau_ff_rk = -calc_impedance_torque(J_RIGHT_KNEE, target_knee_rad);
+
+        // --- 4. แปลงมุมเป้าหมายเป็นจำนวนรอบ (Turns) เพื่อส่งให้ ODrive ---
+        float left_hip_turns = ((target_hip_rad * dir_sign(maps[0].direction)) - maps[0].pos_offset_rad) / maps[0].pos_scale;
         if (maps[0].flip)
             left_hip_turns = -left_hip_turns;
         left_hip_turns += maps[0].pos0_raw;
-        odrv_left_hip.setPosition(left_hip_turns, 0.0f, 0.0f);
 
-        float left_knee_turns = ((2.408554368 * dir_sign(maps[1].direction)) - maps[1].pos_offset_rad) / maps[1].pos_scale;
+        float left_knee_turns = ((target_knee_rad * dir_sign(maps[1].direction)) - maps[1].pos_offset_rad) / maps[1].pos_scale;
         if (maps[1].flip)
             left_knee_turns = -left_knee_turns;
         left_knee_turns += maps[1].pos0_raw;
-        odrv_left_knee.setPosition(left_knee_turns, 0.0f, 0.0f);
 
-        float right_hip_turns = ((2.0 * dir_sign(maps[3].direction)) - maps[3].pos_offset_rad) / maps[3].pos_scale;
+        float right_hip_turns = ((target_hip_rad * dir_sign(maps[3].direction)) - maps[3].pos_offset_rad) / maps[3].pos_scale;
         if (maps[3].flip)
             right_hip_turns = -right_hip_turns;
         right_hip_turns += maps[3].pos0_raw;
-        odrv_right_hip.setPosition(right_hip_turns, 0.0f, 0.0f);
 
-        float right_knee_turns = ((2.408554368 * dir_sign(maps[4].direction)) - maps[4].pos_offset_rad) / maps[4].pos_scale;
+        float right_knee_turns = ((target_knee_rad * dir_sign(maps[4].direction)) - maps[4].pos_offset_rad) / maps[4].pos_scale;
         if (maps[4].flip)
             right_knee_turns = -right_knee_turns;
         right_knee_turns += maps[4].pos0_raw;
-        odrv_right_knee.setPosition(right_knee_turns, 0.0f, 0.0f);
+
+        odrv_left_hip.setPosition(left_hip_turns, 0.0f, tau_ff_lh);
+        odrv_left_knee.setPosition(left_knee_turns, 0.0f, tau_ff_lk);
+        odrv_right_hip.setPosition(right_hip_turns, 0.0f, tau_ff_rh);
+        odrv_right_knee.setPosition(right_knee_turns, 0.0f, tau_ff_rk);
 
         Kinematics::rpm req_rpm = kinematics.getRPM(twist_msg.linear.x, twist_msg.linear.y, twist_msg.angular.z);
-        debug_msg.linear.x = req_rpm.motor1 / 60.f;
-        debug_msg.linear.y = req_rpm.motor2 / 60.f;
         odrv_left_wheel.setVelocity(-req_rpm.motor1 / 60.f);
         odrv_right_wheel.setVelocity(req_rpm.motor2 / 60.f);
+        debug_msg.linear.x = req_rpm.motor1 / 60.f;
+        debug_msg.linear.y = req_rpm.motor2 / 60.f;
+        debug_msg.linear.z = tau_ff_lh;
+        debug_msg.angular.x = tau_ff_lk;
+        debug_msg.angular.y = tau_ff_rh;
+        debug_msg.angular.z = tau_ff_rk;
     }
     else if (robot_state == OPERATING)
     {
+        // // --- 1. กำหนดพารามิเตอร์ Impedance (Virtual Spring-Damper) ---
+        // float Kp_imp = 2.0f; // ความแข็งของสปริงช่วยดึง (Nm/rad)
+        // float Kd_imp = 0.2f; // ความหนืดต้านการกระตุก (Nm/(rad/s))
+
+        // // ** ลิมิตแรงบิดสูงสุด (Clamp Max Torque) **
+        // // ป้องกันไม่ให้ Feedforward จ่ายกระแสเกินพิกัดของ ODrive (ปรับหน่วยเป็น Nm)
+        // float max_assist_torque = 1.0f;
+
+        // // --- 2. ฟังก์ชันคำนวณ Torque Feedforward พร้อมทำ Clamp ---
+        // auto calc_impedance_torque = [&](int joint_idx, float target_rad) -> float
+        // {
+        //     float current_rad = joint_state_msg.position.data[joint_idx];
+        //     float current_vel = joint_state_msg.velocity.data[joint_idx];
+
+        //     // สมการ Impedance: tau = Kp*error - Kd*velocity
+        //     float error = target_rad - current_rad;
+        //     float tau = (Kp_imp * error) - (Kd_imp * current_vel);
+
+        //     // แปลงทิศทาง Torque ให้ตรงกับทิศทางการหมุนของมอเตอร์
+        //     const float s = dir_sign(maps[joint_idx].direction);
+        //     tau *= s;
+        //     if (maps[joint_idx].flip)
+        //     {
+        //         tau = -tau;
+        //     }
+
+        //     // ** CLAMP MAX TORQUE ตรงนี้ครับ **
+        //     return clampf(tau, -max_assist_torque, max_assist_torque);
+        // };
+
         float tau_wheel_left = (float)tau_L_cmd;
         float tau_wheel_right = (float)tau_R_cmd;
         odrv_left_wheel.setTorque(-tau_wheel_left);
@@ -875,32 +955,41 @@ void moveBase()
         if (maps[0].flip)
             left_hip_turns = -left_hip_turns;
         left_hip_turns += maps[0].pos0_raw;
-        odrv_left_hip.setPosition(left_hip_turns, 0.0f, -target_joint_eff[J_LEFT_HIP] * 0.05f);
 
         float left_knee_turns = ((target_joint_pos[J_LEFT_KNEE] * dir_sign(maps[1].direction)) - maps[1].pos_offset_rad) / maps[1].pos_scale;
         if (maps[1].flip)
             left_knee_turns = -left_knee_turns;
         left_knee_turns += maps[1].pos0_raw;
-        odrv_left_knee.setPosition(left_knee_turns, 0.0f, target_joint_eff[J_LEFT_KNEE] * 0.1f);
 
         float right_hip_turns = ((target_joint_pos[J_RIGHT_HIP] * dir_sign(maps[3].direction)) - maps[3].pos_offset_rad) / maps[3].pos_scale;
         if (maps[3].flip)
             right_hip_turns = -right_hip_turns;
         right_hip_turns += maps[3].pos0_raw;
-        odrv_right_hip.setPosition(right_hip_turns, 0.0f, target_joint_eff[J_RIGHT_HIP] * 0.05f);
 
         float right_knee_turns = ((target_joint_pos[J_RIGHT_KNEE] * dir_sign(maps[4].direction)) - maps[4].pos_offset_rad) / maps[4].pos_scale;
         if (maps[4].flip)
             right_knee_turns = -right_knee_turns;
         right_knee_turns += maps[4].pos0_raw;
-        odrv_right_knee.setPosition(right_knee_turns, 0.0f, -target_joint_eff[J_RIGHT_KNEE] * 0.1f);
 
-        debug_msg.linear.x = -tau_wheel_left;
-        debug_msg.linear.y = tau_wheel_right;
-        debug_msg.linear.z = left_hip_turns;
-        debug_msg.angular.x = left_knee_turns;
-        debug_msg.angular.y = right_hip_turns;
-        debug_msg.angular.z = right_knee_turns;
+        // --- 3. คำนวณ Feedforward Torque สำหรับแต่ละข้อต่อ ---
+        // float tau_ff_lh = calc_impedance_torque(J_LEFT_HIP, target_joint_pos[J_LEFT_HIP]);
+        // float tau_ff_lk = calc_impedance_torque(J_LEFT_KNEE, target_joint_pos[J_LEFT_KNEE]);
+        // float tau_ff_rh = calc_impedance_torque(J_RIGHT_HIP, target_joint_pos[J_RIGHT_HIP]);
+        // float tau_ff_rk = calc_impedance_torque(J_RIGHT_KNEE, target_joint_pos[J_RIGHT_KNEE]);
+
+        // odrv_left_hip.setPosition(left_hip_turns, 0.0f, -((target_joint_eff[J_LEFT_HIP] * 0.05f) + tau_ff_lh));
+        // odrv_left_knee.setPosition(left_knee_turns, 0.0f, (target_joint_eff[J_LEFT_KNEE] * 0.1f) + tau_ff_lk);
+        // odrv_right_hip.setPosition(right_hip_turns, 0.0f, (target_joint_eff[J_RIGHT_HIP] * 0.05f) + tau_ff_rh);
+        // odrv_right_knee.setPosition(right_knee_turns, 0.0f, -((target_joint_eff[J_RIGHT_KNEE] * 0.1f) + tau_ff_rk));
+
+        odrv_left_hip.setPosition(left_hip_turns, 0.0f, -((target_joint_eff[J_LEFT_HIP] * 0.05f)));
+        odrv_left_knee.setPosition(left_knee_turns, 0.0f, (target_joint_eff[J_LEFT_KNEE] * 0.1f));
+        odrv_right_hip.setPosition(right_hip_turns, 0.0f, (target_joint_eff[J_RIGHT_HIP] * 0.05f));
+        odrv_right_knee.setPosition(right_knee_turns, 0.0f, -((target_joint_eff[J_RIGHT_KNEE] * 0.1f)));
+
+        debug_msg.linear.x = lqi_integral_vel;
+        debug_msg.linear.y = v_est - v_ref_lqr;
+        debug_msg.linear.z = tau_L_cmd + tau_R_cmd;
     }
     else
     {
@@ -937,19 +1026,50 @@ void moveActuator()
 
     if (prev_light_state != light_state)
     {
-        switch (light_state)
+        if (light_state == TURN_ON)
         {
-        case TURN_ON:
-            break;
-        case BLINK:
-            break;
-        case TURN_OFF:
-            break;
-        default:
-            break;
+            led_running = true;
+            led_step = 0;
+            led_total_steps = 2; // 0->90->0 (1 รอบ)
+            led_step_start_ms = millis();
+        }
+        // กรณีสั่งปิด
+        else if (light_state == TURN_OFF)
+        {
+            led_running = true;
+            led_step = 0;
+            led_total_steps = 6; // 0->90->0 (2 รอบ)
+            led_step_start_ms = millis();
         }
     }
     prev_light_state = light_state;
+
+    // ส่วนประมวลผล Sequence ของเซอร์โว
+    if (led_running)
+    {
+        if (millis() - led_step_start_ms >= 150)
+        {
+            led_step++;
+            led_step_start_ms = millis();
+
+            if (led_step <= led_total_steps)
+            {
+                if (led_step % 2 == 1)
+                {
+                    servoActuator.setServoAngle(LED_CH, 90.0f); // ดึงคันโยก
+                }
+                else
+                {
+                    servoActuator.setServoAngle(LED_CH, 0.0f); // ปล่อยคันโยก
+                }
+            }
+            else
+            {
+                led_running = false;
+                led_step = 0;
+            }
+        }
+    }
 }
 
 void publishData()

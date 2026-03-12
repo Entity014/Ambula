@@ -9,31 +9,39 @@ wbc_node:
     non_actuated_effort_mode: "zero"
 
     # ======================================================
+    # State Source
+    # ======================================================
+    state_source: "ekf"
+    odom_topic: "/odom"
+    imu_topic: "/imu/data_raw"
+    raw_zero_gyro_z: false
+
+    # ======================================================
     # WBC Weights
     # ======================================================
-    weight_height:  0.0
-    weight_roll:    0.0  
-    weight_posture: 15.0   # ดึงขากลับ IK reference (Hip + Knee)
+    weight_height:  50.0
+    weight_roll:     0.0
+    weight_posture: 25.0   # ↑ raised from 2.0 — needed to drive hip τ via posture task
 
     # ======================================================
     # PD Gains — Height Task
     # ======================================================
-    kp_z:  0.0
-    kd_z:  0.0
+    kp_z:  1500.0
+    kd_z:    80.0
 
     # ======================================================
-    # PD Gains — Roll Task
+    # PD Gains — Roll Task (disabled)
     # ======================================================
     kp_roll: 0.0
     kd_roll: 0.0
 
     # ======================================================
-    # PD Gains — Posture (Hip vs Knee แยกกัน)
+    # PD Gains — Posture
     # ======================================================
-    kp_hip:  350.0   # Hip ดึงกลับแรง รับโหลดแทน Knee
-    kd_hip:   35.0
-    kp_knee:  60.0   # Knee นิ่ม  (kd ≈ 2√kp → critically damped)
-    kd_knee:  15.5   # 2*sqrt(50) ≈ 14.1
+    kp_hip:  500.0   # ↑ raised — amplifies small posture error into useful torque
+    kd_hip:   45.0
+    kp_knee: 100.0
+    kd_knee:  20.0
 
     # ======================================================
     # Hardware / Contact Constraints
@@ -41,45 +49,74 @@ wbc_node:
     tau_limit:   40.0
     friction_mu:  0.6
 
-    # ======================================================
-    # Per-joint torque limits (override จาก URDF)
-    # ======================================================
     tau_limits: []
-    tau_override: "left_waist_joint:20,left_hip_joint:40,left_knee_joint:20,right_waist_joint:20,right_hip_joint:40,right_knee_joint:20"
+    tau_override: "left_waist_joint:20,left_hip_joint:40,left_knee_joint:40,right_waist_joint:20,right_hip_joint:40,right_knee_joint:40"
 
     # ======================================================
-    # Load Sharing — tau regularization weights
-    # knee_tau_scale สูง → solver หลีกเลี่ยง knee torque → hip รับโหลด
+    # Torque regularisation weights
     # ======================================================
-    knee_tau_scale:  12.0
-    hip_tau_scale:    1.0
-    waist_tau_scale:  5.0
+    knee_tau_scale:  8.0
+    hip_tau_scale:   1.0    # keep low — we WANT hip torque
+    waist_tau_scale: 5.0
 
-    # ======================================================
-    # Posture acceleration clip
-    # ======================================================
-    posture_qdd_clip: 250.0
-
-    # ======================================================
-    # Knee Spiral Torsion Spring (virtual parallel spring)
-    # ======================================================
-    knee_spring_k:         0.0    # Nm/rad — เบาพอ ไม่สร้าง oscillation
-    knee_spring_b:         0.0    # Nm·s/rad — damping คู่กับ spring
-    knee_spring_q0_left:   0.0     # ตามค่าที่ left_knee กำลังถูกสั่ง
-    knee_spring_q0_right:  0.0     # ต้องลบ!
-    knee_spring_sign_left:  0.0
-    knee_spring_sign_right: 0.0    # หรือลอง 1.0 ถ้ายังไม่สมดุล
+    posture_qdd_clip: 400.0  # ↑ allow largewr qdd_des so PD drives bigger torque
 
     # ======================================================
     # Robustness
     # ======================================================
     w_roll_slack: 10000.0
-    alpha_bg:        20.0   # Baumgarte gain สำหรับ rolling constraint
+    alpha_bg:        20.0
 
-    height_boost_enable: true
-    height_boost_duration: 0.6
-    height_boost_kp_mult: 1.0
-    height_boost_w_mult: 1.0
-    height_boost_zdd_clip: 100.0
-    height_boost_knee_tau_scale: 1.0
-    height_boost_tau_override: "left_knee_joint:40,right_knee_joint:40"
+    # ↓ CRITICAL: lowered from 1e4 → 500
+    # High w_dyn_slack lets the solver "cheat" via slack instead of
+    # generating real hip torque.  Lowering forces it to use τ_hip.
+    w_dyn_slack: 500.0
+
+    # ======================================================
+    # Knee Spiral Torsion Spring (feed-forward, unchanged)
+    # ======================================================
+    knee_spring_k:         0.5
+    knee_spring_b:         0.0
+    knee_spring_q0_left:   4.18879   # current standing knee angle (rad)
+    knee_spring_q0_right:  4.18879
+    knee_spring_sign_left:  1.0
+    knee_spring_sign_right: 1.0
+
+    # ======================================================
+    # NEW: Hip Spiral Torsion Spring (feed-forward)
+    # Provides baseline τ_hip even when posture error ≈ 0.
+    # Set q0 to your actual standing hip angle.
+    # Start with k=2.0 and tune upward if hip τ is still low.
+    # ======================================================
+    hip_spring_k:          2.0    # Nm/rad  (start here, tune 1.0–5.0)
+    hip_spring_b:          0.3    # Nm·s/rad damping
+    hip_spring_q0_left:    1.57   # ← set to your real standing hip angle (rad)
+    hip_spring_q0_right:   1.57
+    hip_spring_sign_left:  1.0
+    hip_spring_sign_right: 1.0
+
+    # ======================================================
+    # NEW: Hip Gravity Compensation (feed-forward)
+    # Injects scale * g[hip_iv] into the dynamics RHS so the
+    # solver must produce at least this much hip torque.
+    # 0.0 = off | 0.5–0.8 = recommended | 1.0 = full grav comp
+    # ======================================================
+    hip_grav_comp_scale: 0.6
+
+    # ======================================================
+    # Standup
+    # ======================================================
+    standup_enable:   false
+    standup_height:   0.35
+    standup_duration: 1.2
+
+    # ======================================================
+    # Height Boost
+    # ======================================================
+    height_boost_enable:          false
+    height_boost_duration:        0.6
+    height_boost_kp_mult:         5.0
+    height_boost_w_mult:          1.0
+    height_boost_zdd_clip:     1000.0
+    height_boost_knee_tau_scale:  1.0
+    height_boost_tau_override:    "left_knee_joint:40,right_knee_joint:40"

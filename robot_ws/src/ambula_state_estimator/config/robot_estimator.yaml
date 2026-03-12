@@ -1,0 +1,43 @@
+# config/ambula_state_estimator.yaml
+ambula_state_estimator:
+  ros__parameters:
+
+    # ==========================================
+    # Loop Rate
+    # ==========================================
+    loop_rate_hz: 100.0
+
+    # ==========================================
+    # URDF Path
+    # ==========================================
+    urdf_path: '/home/robot_ws/src/ambula_simulation/ambula_description/urdf/ambula_bot_v3/ambula.urdf'
+
+    # ==========================================
+    # Topic Names
+    # ==========================================
+    topic_imu:         '/imu/data_raw'
+    topic_joint_state: '/joint_states/hardware'
+    topic_pose_pub:    '/ambula/pose_estimation'
+
+    # ==========================================
+    # Frame Names
+    # ==========================================
+    frame_base_link:   'base_link'
+    frame_left_wheel:  'left_wheel_link'
+    frame_right_wheel: 'right_wheel_link'
+    frame_left_hip:    'left_hip_link'
+    frame_right_hip:   'right_hip_link'
+
+    # ==========================================
+    # Joint Names
+    # ==========================================
+    joint_names:
+      - 'left_hip_joint'
+      - 'left_knee_joint'
+      - 'right_hip_joint'
+      - 'right_knee_joint'
+
+    # ==========================================
+    # Safety
+    # ==========================================
+    joint_stale_timeout_sec: 0.1   # warn ถ้า joint data เก่าเกินนี้

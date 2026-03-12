@@ -9,8 +9,8 @@ teleop_node:
     payload_state_topic: "/payload/state"
     led_state_topic: "/led/state"
 
-    use_enable_button: false   # false = ไม่ต้องกดปุ่ม enable
-    use_turbo: false           # false = ปิด turbo
+    use_enable_button: false # false = ไม่ต้องกดปุ่ม enable
+    use_turbo: false # false = ปิด turbo
 
     # -----------------------------
     # cmd_vel mapping
@@ -32,9 +32,9 @@ teleop_node:
     # -----------------------------
     # Height command via cmd_vel.linear.z (D-pad up/down)
     # -----------------------------
-    height_min: 0.15
-    height_max: 0.30
-    height_default: 0.15
+    height_min: 0.35
+    height_max: 0.50
+    height_default: 0.35
     height_step: 0.01
 
     # D-pad vertical: ใช้ axis เป็นหลัก (หลายจอยจะเป็นแกน 7)
@@ -67,8 +67,8 @@ teleop_node:
     y_trigger_btn: 0
     y_pulse_duration_ms: 100.0
 
-    # z cycle button (0->1->2->0)
-    z_cycle_btn: -1
+    # z cycle button (0->1->0)
+    z_cycle_btn: 4
 
     # default states
     state_x_default: 0

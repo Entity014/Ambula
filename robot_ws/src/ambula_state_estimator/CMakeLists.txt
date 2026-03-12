@@ -27,6 +27,7 @@ install(PROGRAMS
     src/diff_drive_kinematics.py
     src/height_estimator.py
     src/state_vector.py
+    src/state_estimator.py
     DESTINATION lib/${PROJECT_NAME}
 )
 

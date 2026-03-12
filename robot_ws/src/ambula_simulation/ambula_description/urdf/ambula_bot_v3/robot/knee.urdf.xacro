@@ -31,7 +31,7 @@
             <origin xyz="${pos_x} ${pos_y} ${pos_z}" />
             <parent link="${side}_hip_link" />
             <child link="${side}_knee_link" />
-            <limit effort="1000" lower="${pi * 7 / 18}" upper="${pi * 29 /36}" velocity="10" />
+            <limit effort="40" lower="${pi * 7 / 18}" upper="${pi * 29 /36}" velocity="10" />
             <dynamics damping="5.0" friction="3.0"/>
         </joint>
 

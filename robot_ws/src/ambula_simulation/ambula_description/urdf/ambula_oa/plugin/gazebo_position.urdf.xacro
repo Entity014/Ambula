@@ -7,10 +7,18 @@
             <initial_position>1.0</initial_position>
             <topic>camera_position_cmd</topic>
         </plugin>
+        <plugin name="gz::sim::systems::JointPositionController" filename="gz-sim-joint-position-controller-system">
+            <joint_name>world_to_base</joint_name>
+            <initial_position>0.0</initial_position>
+            <topic>base_position_cmd</topic>
+            
+            <p_gain>100.0</p_gain>   <i_gain>0.5</i_gain>     <d_gain>80.0</d_gain>    <i_max>100.0</i_max>     <i_min>-100.0</i_min>
+        </plugin>
 
         <plugin filename="gz-sim-joint-state-publisher-system" name="gz::sim::systems::JointStatePublisher">
             <topic>joint_states</topic>
             <joint_name>slider_to_camera</joint_name>
+            <joint_name>world_to_base</joint_name>
         </plugin>
     </gazebo>
 

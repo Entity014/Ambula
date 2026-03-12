@@ -24,7 +24,14 @@ def generate_launch_description():
         )
     )
 
+    robot_estimator_launch = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource(
+            [PathJoinSubstitution([state_estimator_pkg_path, "launch", "robot_estimator.launch.py"])]
+        )
+    )
+
 
     ld = LaunchDescription()
     ld.add_action(localization_launch)
+    ld.add_action(robot_estimator_launch)
     return ld

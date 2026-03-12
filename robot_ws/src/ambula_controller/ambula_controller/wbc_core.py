@@ -3,6 +3,12 @@
 """
 Ascento-style WBC / ID-QP with sigma-based rolling contact
 Pitch Task removed — torso pitch managed externally (e.g. LQR on wheels).
+
+CHANGES vs original:
+  - Added hip_spiral_spring_tau_nv() — feed-forward hip spring (mirrors knee spring)
+  - Added hip gravity compensation feed-forward path
+  - hip_spring params wired through solve_wbc_idqp_full_dynamic_leg_only()
+  - w_dyn_slack default lowered to 500 to stop slack absorbing hip torque
 """
 
 import numpy as np
@@ -92,7 +98,6 @@ def set_joint_velocity_by_name(model: pin.Model, u: np.ndarray, joint_name: str,
 
 
 def compute_adjusted_height_reference(L_ref, theta_pitch, phi_roll, cos_min=0.35):
-    # กันกรณีล้ม/เอียงมากจน cos ~ 0 แล้ว height task ตาย
     cp = max(np.cos(theta_pitch), cos_min)
     cr = max(np.cos(phi_roll),  cos_min)
     return L_ref * cp * cr
@@ -110,21 +115,15 @@ def build_contact_frame_R_CI(n_I: np.ndarray, wheel_forward_I: np.ndarray) -> np
 
 def build_control_frame_N(pC_L_I, pC_R_I, heading_I, n_I=np.array([0.0, 0.0, 1.0])):
     n_I = normalize(n_I)
-    
-    # === แก้ตรงนี้สำคัญที่สุด ===
-    y = normalize(pC_L_I - pC_R_I)          # ← เปลี่ยนจาก pC_R - pC_L เป็น pC_L - pC_R
-    
+    y = normalize(pC_L_I - pC_R_I)
     h = normalize(heading_I - (n_I @ heading_I) * n_I)
     x = normalize(h - (y @ h) * y)
-    
     if np.linalg.norm(x) < 1e-9:
         x = normalize(np.array([1.0, 0.0, 0.0]) - (y @ np.array([1.0, 0.0, 0.0])) * y)
-    
     z = normalize(np.cross(x, y))
     if z @ n_I < 0.0:
         z = -z
-        x = -x                      # ยังคง right-handed
-    
+        x = -x
     pG_I = 0.5 * (pC_L_I + pC_R_I)
     return np.column_stack((x, y, z)), pG_I
 
@@ -314,6 +313,9 @@ def build_tau_regularization_weights(actuated_names: list, w_tau_base: float = 1
         elif "waist" in n: w[i] = w_tau_base * waist_scale
     return w
 
+# =========================================================
+# Knee Spiral Spring  (unchanged)
+# =========================================================
 def knee_spiral_spring_tau_nv(model: pin.Model, q: np.ndarray, u: np.ndarray,
                               knee_spring_k: float = 0.0, knee_spring_b: float = 0.0,
                               knee_spring_q0_left: float = 0.0, knee_spring_q0_right: float = 0.0,
@@ -325,13 +327,88 @@ def knee_spiral_spring_tau_nv(model: pin.Model, q: np.ndarray, u: np.ndarray,
     try:
         jL = model.joints[require_joint_id(model, left_knee_joint)]
         if jL.nv == 1 and jL.nq == 1:
-            tau[jL.idx_v] += float(knee_spring_sign_left) * (-k * (float(q[jL.idx_q]) - float(knee_spring_q0_left)) - b * float(u[jL.idx_v]))
+            tau[jL.idx_v] += float(knee_spring_sign_left) * (
+                -k * (float(q[jL.idx_q]) - float(knee_spring_q0_left))
+                - b * float(u[jL.idx_v])
+            )
     except Exception: pass
     try:
         jR = model.joints[require_joint_id(model, right_knee_joint)]
         if jR.nv == 1 and jR.nq == 1:
-            tau[jR.idx_v] += float(knee_spring_sign_right) * (-k * (float(q[jR.idx_q]) - float(knee_spring_q0_right)) - b * float(u[jR.idx_v]))
+            tau[jR.idx_v] += float(knee_spring_sign_right) * (
+                -k * (float(q[jR.idx_q]) - float(knee_spring_q0_right))
+                - b * float(u[jR.idx_v])
+            )
     except Exception: pass
+    return tau
+
+# =========================================================
+# NEW: Hip Spiral Spring  (feed-forward, mirrors knee spring)
+# =========================================================
+def hip_spiral_spring_tau_nv(model: pin.Model, q: np.ndarray, u: np.ndarray,
+                             hip_spring_k: float = 0.0, hip_spring_b: float = 0.0,
+                             hip_spring_q0_left: float = 0.0, hip_spring_q0_right: float = 0.0,
+                             hip_spring_sign_left: float = 1.0, hip_spring_sign_right: float = 1.0,
+                             left_hip_joint: str = "left_hip_joint",
+                             right_hip_joint: str = "right_hip_joint") -> np.ndarray:
+    """
+    Virtual torsion spring on hip joints.
+    Provides a baseline feed-forward torque at equilibrium so hip τ ≠ 0
+    even when posture error ≈ 0.
+
+    tau_hip = sign * ( -k*(q - q0) - b*dq )
+
+    Positive k → restoring spring (pulls hip back to q0).
+    Sign convention should match the URDF positive-torque direction.
+    """
+    tau = np.zeros(model.nv, dtype=float)
+    k, b = float(hip_spring_k), float(hip_spring_b)
+    if abs(k) < 1e-12 and abs(b) < 1e-12:
+        return tau
+
+    pairs = [
+        (left_hip_joint,  float(hip_spring_q0_left),  float(hip_spring_sign_left)),
+        (right_hip_joint, float(hip_spring_q0_right), float(hip_spring_sign_right)),
+    ]
+    for jname, q0, sign in pairs:
+        try:
+            j = model.joints[require_joint_id(model, jname)]
+            if j.nv == 1 and j.nq == 1:
+                tau[j.idx_v] += sign * (
+                    -k * (float(q[j.idx_q]) - q0)
+                    - b * float(u[j.idx_v])
+                )
+        except Exception:
+            pass
+    return tau
+
+# =========================================================
+# NEW: Hip Gravity Compensation (feed-forward)
+# =========================================================
+def hip_gravity_comp_tau_nv(model: pin.Model, data: pin.Data,
+                            q: np.ndarray,
+                            left_hip_joint: str = "left_hip_joint",
+                            right_hip_joint: str = "right_hip_joint",
+                            scale: float = 1.0) -> np.ndarray:
+    """
+    Adds the generalised-gravity torque for the hip joints as a feed-forward
+    term in beq.  This ensures the solver always produces non-trivial hip τ
+    even at equilibrium (where PD error ≈ 0).
+
+    scale: fraction of gravity comp to inject (0–1 recommended).
+           Use 0.5–0.8 so the QP can still adjust freely.
+    """
+    tau = np.zeros(model.nv, dtype=float)
+    pin.computeGeneralizedGravity(model, data, q)
+    g_nv = data.g.copy()
+
+    for jname in [left_hip_joint, right_hip_joint]:
+        try:
+            j = model.joints[require_joint_id(model, jname)]
+            if j.nv == 1:
+                tau[j.idx_v] = float(scale) * float(g_nv[j.idx_v])
+        except Exception:
+            pass
     return tau
 
 # =========================================================
@@ -345,7 +422,7 @@ def build_base_height_task_N(model, data, q, u, base_frame, R_IN, pG_I, z_ref, k
     a0_NB = R_IN.T @ pin.getFrameClassicalAcceleration(model, data, fid, ref).linear
 
     zdd_des = kp * (z_ref - float(p_NB[2])) - kd * float(v_NB[2])
-    zdd_des = float(np.clip(zdd_des, -8.0, 8.0))
+    zdd_des = float(np.clip(zdd_des, -100.0, 100.0))
 
     Jv = pin.getFrameJacobian(model, data, fid, ref)[0:3, :]
     A = np.array([[0.0, 0.0, 1.0]]) @ (R_IN.T @ Jv)
@@ -357,23 +434,22 @@ def build_base_lateral_tilt_task(model, data, base_frame, target_tilt=0.0, kp=80
     R_WB = data.oMf[fid].rotation.copy()
 
     g_body = R_WB.T @ np.array([0.0, 0.0, -1.0])
-    if g_body[2] < 0.0:          # หากหัวคว่ำ (กรณีหุ่นล้ม)
+    if g_body[2] < 0.0:
         g_body = -g_body
 
-    # === FLIP SIGN ที่สำคัญที่สุด ===
-    tilt = np.arctan2(g_body[0], g_body[2])   
+    tilt = np.arctan2(g_body[0], g_body[2])
 
     omega = pin.getFrameVelocity(model, data, fid, pin.ReferenceFrame.LOCAL_WORLD_ALIGNED).angular
-    tilt_rate = omega[0]                      
+    tilt_rate = omega[0]
 
     dd_des = kp * (target_tilt - tilt) - kd * tilt_rate
     dd_des = np.clip(dd_des, -20.0, 20.0)
 
     Jw = pin.getFrameJacobian(model, data, fid, pin.ReferenceFrame.LOCAL_WORLD_ALIGNED)[3:6, :]
-    A = np.array([[1.0, 0.0, 0.0]]) @ Jw      
+    A = np.array([[1.0, 0.0, 0.0]]) @ Jw
 
     alpha0 = pin.getFrameClassicalAcceleration(model, data, fid, pin.ReferenceFrame.LOCAL_WORLD_ALIGNED).angular
-    b = np.array([dd_des - float(alpha0[0])])  
+    b = np.array([dd_des - float(alpha0[0])])
 
     return A, b, tilt, tilt_rate
 
@@ -441,14 +517,30 @@ def solve_wbc_idqp_full_dynamic_leg_only(
         w_height=80.0, w_roll=80.0, w_posture=2.0,
         w_ddq=1.0, w_tau=1e-3, w_f=1e-3, w_roll_slack=1e4,
         knee_tau_scale: float = 5.0, hip_tau_scale: float = 1.0, waist_tau_scale: float = 5.0,
-        use_dyn_slack=True, w_dyn_slack=1e4,
+        use_dyn_slack=True, w_dyn_slack=500.0,          # ← default lowered from 1e4 → 500
         wheel_ddq_mode="soft", wheel_ddq_meas: dict | None = None, w_wheel_ddq=1e3,
+        # Knee spring
         knee_spring_k: float = 0.0, knee_spring_b: float = 0.0,
         knee_spring_q0_left: float = 0.0, knee_spring_q0_right: float = 0.0,
         knee_spring_sign_left: float = 1.0, knee_spring_sign_right: float = 1.0,
         left_knee_joint: str = "left_knee_joint", right_knee_joint: str = "right_knee_joint",
+        # NEW: Hip spring
+        hip_spring_k: float = 0.0, hip_spring_b: float = 0.0,
+        hip_spring_q0_left: float = 0.0, hip_spring_q0_right: float = 0.0,
+        hip_spring_sign_left: float = 1.0, hip_spring_sign_right: float = 1.0,
+        left_hip_joint: str = "left_hip_joint", right_hip_joint: str = "right_hip_joint",
+        # NEW: Hip gravity compensation
+        hip_grav_comp_scale: float = 0.0,              # 0 = off, 0.5–0.8 = recommended
         posture_qdd_clip: float = 300.0,
 ):
+    """
+    Whole-Body Controller — Inverse Dynamics QP (leg joints only).
+
+    Key additions over original:
+      • hip_spiral_spring_tau_nv  — feed-forward spring keeps hip τ ≠ 0 at eq.
+      • hip_gravity_comp_tau_nv   — optional gravity-comp feed-forward for hips.
+      • w_dyn_slack default = 500  (was 1e4) so slack cannot absorb hip torque.
+    """
     nv = model.nv
 
     S, na, actuated_ivs, actuated_names = build_actuation_selection(model, exclude_keywords=("wheel",))
@@ -456,20 +548,44 @@ def solve_wbc_idqp_full_dynamic_leg_only(
 
     if q_ref_actuated is None:
         q_ref_actuated = np.zeros(na, dtype=float)
-        iv_to_iq = {model.joints[j].idx_v: model.joints[j].idx_q for j in range(1, model.njoints) if model.joints[j].nv == 1}
-        for i, iv in enumerate(actuated_ivs): q_ref_actuated[i] = q[iv_to_iq[iv]]
+        iv_to_iq = {model.joints[j].idx_v: model.joints[j].idx_q
+                    for j in range(1, model.njoints) if model.joints[j].nv == 1}
+        for i, iv in enumerate(actuated_ivs):
+            q_ref_actuated[i] = q[iv_to_iq[iv]]
 
     pin.computeAllTerms(model, data, q, u)
     M = data.M.copy()
     h = data.nle.copy()
 
+    # ── Feed-forward spring torques ───────────────────────────────────────────
     tau_spring_nv = knee_spiral_spring_tau_nv(
-        model, q, u, knee_spring_k=knee_spring_k, knee_spring_b=knee_spring_b,
+        model, q, u,
+        knee_spring_k=knee_spring_k, knee_spring_b=knee_spring_b,
         knee_spring_q0_left=knee_spring_q0_left, knee_spring_q0_right=knee_spring_q0_right,
         knee_spring_sign_left=knee_spring_sign_left, knee_spring_sign_right=knee_spring_sign_right,
-        left_knee_joint=left_knee_joint, right_knee_joint=right_knee_joint
+        left_knee_joint=left_knee_joint, right_knee_joint=right_knee_joint,
     )
 
+    # NEW: hip spring feed-forward
+    tau_hip_spring_nv = hip_spiral_spring_tau_nv(
+        model, q, u,
+        hip_spring_k=hip_spring_k, hip_spring_b=hip_spring_b,
+        hip_spring_q0_left=hip_spring_q0_left, hip_spring_q0_right=hip_spring_q0_right,
+        hip_spring_sign_left=hip_spring_sign_left, hip_spring_sign_right=hip_spring_sign_right,
+        left_hip_joint=left_hip_joint, right_hip_joint=right_hip_joint,
+    )
+
+    # NEW: hip gravity compensation feed-forward
+    tau_hip_grav_nv = hip_gravity_comp_tau_nv(
+        model, data, q,
+        left_hip_joint=left_hip_joint, right_hip_joint=right_hip_joint,
+        scale=hip_grav_comp_scale,
+    )
+
+    # Combined feed-forward injected into dynamics RHS
+    tau_ff_nv = tau_spring_nv + tau_hip_spring_nv + tau_hip_grav_nv
+
+    # ── Rolling constraints ───────────────────────────────────────────────────
     Aroll, rhs_roll, contacts = build_rolling_constraints_fast(
         model, data, q, u, wheel_frames, rho=rho, n_world=n_world,
         wheel_forward_axis_local=wheel_forward_axis_local, alpha_bg=alpha_bg
@@ -477,69 +593,92 @@ def solve_wbc_idqp_full_dynamic_leg_only(
     nc = len(contacts)
     Jc = np.vstack([c["Jc_I"] for c in contacts])
     Rblk = np.zeros((3 * nc, 3 * nc), dtype=float)
-    for i in range(nc): Rblk[3*i:3*i+3, 3*i:3*i+3] = contacts[i]["R_IC"]
+    for i in range(nc):
+        Rblk[3*i:3*i+3, 3*i:3*i+3] = contacts[i]["R_IC"]
 
-    n_f = 3 * nc
+    n_f    = 3 * nc
     n_roll = Aroll.shape[0]
     n_sdyn = nv if use_dyn_slack else 0
-    n_x = nv + na + n_f + n_roll + n_sdyn
+    n_x    = nv + na + n_f + n_roll + n_sdyn
 
-    idx_ddq0, idx_tau0, idx_f0 = 0, nv, nv + na
-    idx_sroll0, idx_sdyn0 = nv + na + n_f, nv + na + n_f + n_roll
+    idx_ddq0  = 0
+    idx_tau0  = nv
+    idx_f0    = nv + na
+    idx_sroll0 = nv + na + n_f
+    idx_sdyn0  = nv + na + n_f + n_roll
 
+    # ── Dynamics constraint ───────────────────────────────────────────────────
     A_dyn = np.zeros((nv, n_x), dtype=float)
     A_dyn[:, idx_ddq0:idx_ddq0+nv] = M
     A_dyn[:, idx_tau0:idx_tau0+na] = -S.T
-    A_dyn[:, idx_f0:idx_f0+n_f] = -(Jc.T @ Rblk)
-    if use_dyn_slack: A_dyn[:, idx_sdyn0:idx_sdyn0+nv] = np.eye(nv)
+    A_dyn[:, idx_f0:idx_f0+n_f]   = -(Jc.T @ Rblk)
+    if use_dyn_slack:
+        A_dyn[:, idx_sdyn0:idx_sdyn0+nv] = np.eye(nv)
 
+    # ── Rolling equality ──────────────────────────────────────────────────────
     A_roll_eq = np.zeros((n_roll, n_x), dtype=float)
     A_roll_eq[:, idx_ddq0:idx_ddq0+nv] = Aroll
     A_roll_eq[:, idx_sroll0:idx_sroll0+n_roll] = np.eye(n_roll)
 
     Aeq = np.vstack([A_dyn, A_roll_eq])
-    beq = np.hstack([(-h + tau_spring_nv).reshape(-1), rhs_roll.reshape(-1)])
+    beq = np.hstack([(-h + tau_ff_nv).reshape(-1), rhs_roll.reshape(-1)])
 
+    # Optional hard wheel ddq constraint
     if wheel_ddq_mode.lower() == "hard":
         ivs_used, ddq_vals = wheel_ddq_meas_to_rows(model, wheel_ddq_meas, wheel_ivs)
         if len(ivs_used) > 0:
             A_w = np.zeros((len(ivs_used), n_x), dtype=float)
-            for i, iv in enumerate(ivs_used): A_w[i, idx_ddq0 + iv] = 1.0
-            Aeq, beq = np.vstack([Aeq, A_w]), np.hstack([beq, ddq_vals])
+            for i, iv in enumerate(ivs_used):
+                A_w[i, idx_ddq0 + iv] = 1.0
+            Aeq = np.vstack([Aeq, A_w])
+            beq = np.hstack([beq, ddq_vals])
 
-    tau_max_vec = build_tau_limits_per_actuated_joint(model, actuated_ivs, default_tau=float(tau_limit), tau_override=tau_override)
+    # ── Inequality constraints ────────────────────────────────────────────────
+    tau_max_vec = build_tau_limits_per_actuated_joint(
+        model, actuated_ivs, default_tau=float(tau_limit), tau_override=tau_override
+    )
     A_tau = np.zeros((na, n_x), dtype=float)
-    for i in range(na): A_tau[i, idx_tau0 + i] = 1.0
+    for i in range(na):
+        A_tau[i, idx_tau0 + i] = 1.0
 
     A_fric = np.zeros((5 * nc, n_x), dtype=float)
     row = 0
     for i in range(nc):
         base = idx_f0 + 3*i
-        A_fric[row:row+2, base+0], A_fric[row:row+2, base+2] = np.array([1.0, -1.0]), -mu
+        A_fric[row:row+2, base+0] = np.array([1.0, -1.0])
+        A_fric[row:row+2, base+2] = -mu
         row += 2
-        A_fric[row:row+2, base+1], A_fric[row:row+2, base+2] = np.array([1.0, -1.0]), -mu
+        A_fric[row:row+2, base+1] = np.array([1.0, -1.0])
+        A_fric[row:row+2, base+2] = -mu
         row += 2
         A_fric[row, base+2] = -1.0
         row += 1
 
-    iv_list = list(actuated_ivs) + list(wheel_ivs)
-    n_kin = len(iv_list)
-    A_kin = np.zeros((n_kin, n_x), dtype=float)
-    ddq_lb, ddq_ub = np.zeros(n_kin), np.zeros(n_kin)
+    iv_list  = list(actuated_ivs) + list(wheel_ivs)
+    n_kin    = len(iv_list)
+    A_kin    = np.zeros((n_kin, n_x), dtype=float)
+    ddq_lb   = np.zeros(n_kin)
+    ddq_ub   = np.zeros(n_kin)
     kp_limit = 20.0
-    iv_to_joint = {model.joints[j].idx_v: model.joints[j] for j in range(1, model.njoints) if model.joints[j].nv == 1}
+    iv_to_joint = {model.joints[j].idx_v: model.joints[j]
+                   for j in range(1, model.njoints) if model.joints[j].nv == 1}
 
     for i, iv in enumerate(iv_list):
         joint = iv_to_joint[iv]
-        iq = joint.idx_q
+        iq    = joint.idx_q
         qi, vi = float(q[iq]), float(u[iv])
-        q_min, q_max = float(model.lowerPositionLimit[iq]), float(model.upperPositionLimit[iq])
+        q_min  = float(model.lowerPositionLimit[iq])
+        q_max  = float(model.upperPositionLimit[iq])
         v_max_urdf = float(model.velocityLimit[iv]) if iv < len(model.velocityLimit) else 0.0
         if v_max_urdf <= 1e-4: v_max_urdf = 100.0
         v_min_urdf = -v_max_urdf
-        is_continuous = ((joint.nq == 2) or (abs(q_max - q_min) < 1e-4) or (q_max > 1e4) or (q_min < -1e4))
+        is_continuous = (
+            (joint.nq == 2) or (abs(q_max - q_min) < 1e-4)
+            or (q_max > 1e4) or (q_min < -1e4)
+        )
         if is_continuous:
-            v_allowed_max, v_allowed_min = v_max_urdf, v_min_urdf
+            v_allowed_max = v_max_urdf
+            v_allowed_min = v_min_urdf
         else:
             v_allowed_max = min(v_max_urdf, kp_limit * (q_max - qi))
             v_allowed_min = max(v_min_urdf, kp_limit * (q_min - qi))
@@ -549,38 +688,46 @@ def solve_wbc_idqp_full_dynamic_leg_only(
         if ddq_lb[i] > ddq_ub[i]:
             ddq_lb[i] = ddq_ub[i] = 0.5 * (ddq_lb[i] + ddq_ub[i])
 
-    Aineq = np.vstack([A_tau, A_fric, A_kin])
+    Aineq  = np.vstack([A_tau, A_fric, A_kin])
     l_ineq = np.hstack([-tau_max_vec, -np.inf * np.ones(5 * nc), ddq_lb])
-    u_ineq = np.hstack([+tau_max_vec, np.zeros(5 * nc), ddq_ub])
+    u_ineq = np.hstack([+tau_max_vec,  np.zeros(5 * nc),          ddq_ub])
 
-    H, g_obj = np.zeros((n_x, n_x), dtype=float), np.zeros(n_x)
+    # ── Cost function ─────────────────────────────────────────────────────────
+    H     = np.zeros((n_x, n_x), dtype=float)
+    g_obj = np.zeros(n_x)
+
     H[idx_ddq0:idx_ddq0+nv, idx_ddq0:idx_ddq0+nv] += w_ddq * np.eye(nv)
 
     w_tau_vec = build_tau_regularization_weights(
         actuated_names, w_tau_base=w_tau,
-        knee_scale=knee_tau_scale, hip_scale=hip_tau_scale, waist_scale=waist_tau_scale
+        knee_scale=knee_tau_scale, hip_scale=hip_tau_scale, waist_scale=waist_tau_scale,
     )
-    H[idx_tau0:idx_tau0+na, idx_tau0:idx_tau0+na] += np.diag(w_tau_vec)
-    H[idx_f0:idx_f0+n_f, idx_f0:idx_f0+n_f] += w_f * np.eye(n_f)
+    H[idx_tau0:idx_tau0+na, idx_tau0:idx_tau0+na]         += np.diag(w_tau_vec)
+    H[idx_f0:idx_f0+n_f,   idx_f0:idx_f0+n_f]             += w_f * np.eye(n_f)
     H[idx_sroll0:idx_sroll0+n_roll, idx_sroll0:idx_sroll0+n_roll] += w_roll_slack * np.eye(n_roll)
-    if use_dyn_slack: H[idx_sdyn0:idx_sdyn0+nv, idx_sdyn0:idx_sdyn0+nv] += w_dyn_slack * np.eye(nv)
+    if use_dyn_slack:
+        H[idx_sdyn0:idx_sdyn0+nv, idx_sdyn0:idx_sdyn0+nv] += w_dyn_slack * np.eye(nv)
 
     pin.forwardKinematics(model, data, q, u, np.zeros_like(u))
     pin.updateFramePlacements(model, data)
     heading_I = compute_heading_from_base(model, data, base_frame, normalize(n_world))
-    R_IN, pG_I = build_control_frame_N(contacts[0]["p_IC"], contacts[1]["p_IC"], heading_I, normalize(n_world))
+    R_IN, pG_I = build_control_frame_N(
+        contacts[0]["p_IC"], contacts[1]["p_IC"], heading_I, normalize(n_world)
+    )
     base_fid = require_frame_id(model, base_frame)
     R_NB = R_IN.T @ data.oMf[base_fid].rotation
     current_roll, current_pitch, _ = rpy_from_R_zyx(R_NB)
 
-    # ── Height Task ──────────────────────────────────────────────────────────
+    # ── Height Task ───────────────────────────────────────────────────────────
     adjusted_z_ref = compute_adjusted_height_reference(target_base_height, current_pitch, current_roll)
-    A_h, b_h = build_base_height_task_N(model, data, q, u, base_frame, R_IN, pG_I, adjusted_z_ref, kp_z, kd_z)
+    A_h, b_h = build_base_height_task_N(
+        model, data, q, u, base_frame, R_IN, pG_I, adjusted_z_ref, kp_z, kd_z
+    )
     A_full = np.zeros((A_h.shape[0], n_x), dtype=float)
     A_full[:, idx_ddq0:idx_ddq0+nv] = A_h
     H, g_obj = add_least_squares_cost(H, g_obj, A_full, b_h, w_height)
 
-    # ── Roll Task (Gravity-based) ─────────────────────────────────────────────
+    # ── Roll Task ─────────────────────────────────────────────────────────────
     A_r, b_r, roll_cur, rolldot_cur = build_base_lateral_tilt_task(
         model, data, base_frame, target_roll, kp_roll, kd_roll
     )
@@ -588,13 +735,13 @@ def solve_wbc_idqp_full_dynamic_leg_only(
     A_full[:, idx_ddq0:idx_ddq0+nv] = A_r
     H, g_obj = add_least_squares_cost(H, g_obj, A_full, b_r, w_roll)
 
-    # ── Posture Task ─────────────────────────────────────────────────────────
+    # ── Posture Task ──────────────────────────────────────────────────────────
     if w_posture > 0.0:
         A_post, b_post = build_posture_task(
             model, q, u, q_ref_actuated, actuated_ivs, actuated_names,
             kp_hip=kp_hip, kd_hip=kd_hip,
             kp_knee=kp_knee, kd_knee=kd_knee,
-            qdd_clip=posture_qdd_clip
+            qdd_clip=posture_qdd_clip,
         )
         A_full = np.zeros((A_post.shape[0], n_x), dtype=float)
         A_full[:, idx_ddq0:idx_ddq0+nv] = A_post
@@ -605,12 +752,14 @@ def solve_wbc_idqp_full_dynamic_leg_only(
         ivs_used, ddq_vals = wheel_ddq_meas_to_rows(model, wheel_ddq_meas, wheel_ivs)
         if len(ivs_used) > 0 and w_wheel_ddq > 0.0:
             A_wsoft = np.zeros((len(ivs_used), n_x), dtype=float)
-            for i, iv in enumerate(ivs_used): A_wsoft[i, idx_ddq0 + iv] = 1.0
+            for i, iv in enumerate(ivs_used):
+                A_wsoft[i, idx_ddq0 + iv] = 1.0
             H, g_obj = add_least_squares_cost(H, g_obj, A_wsoft, ddq_vals, w_wheel_ddq)
 
-    prob = osqp.OSQP()
-    A_osqp = sparse.csc_matrix(np.vstack([Aeq, Aineq]))
-    P = sparse.csc_matrix((H + H.T) * 0.5)
+    # ── Solve ─────────────────────────────────────────────────────────────────
+    prob    = osqp.OSQP()
+    A_osqp  = sparse.csc_matrix(np.vstack([Aeq, Aineq]))
+    P       = sparse.csc_matrix((H + H.T) * 0.5)
 
     prob.setup(
         P=P, q=g_obj, A=A_osqp,
@@ -618,7 +767,7 @@ def solve_wbc_idqp_full_dynamic_leg_only(
         u=np.concatenate([beq, u_ineq]),
         verbose=False, polish=False,
         eps_abs=5e-3, eps_rel=5e-3, eps_prim_inf=1e-4, eps_dual_inf=1e-4,
-        adaptive_rho=True, max_iter=2000, warm_start=True
+        adaptive_rho=True, max_iter=2000, warm_start=True,
     )
 
     res = prob.solve()
@@ -636,7 +785,7 @@ def solve_wbc_idqp_full_dynamic_leg_only(
         ddq=ddq, tau=tau_leg,
         actuated_names=actuated_names, wheel_joint_names=wheel_joint_names,
         fC=fC, roll_slack=s_roll, dyn_slack=s_dyn,
-        dyn_res=A_dyn @ x + h - tau_spring_nv,
+        dyn_res=A_dyn @ x + h - tau_ff_nv,
         roll_res=Aroll @ ddq - rhs_roll,
         adjusted_z_ref=adjusted_z_ref,
         target_roll=target_roll,
@@ -644,6 +793,8 @@ def solve_wbc_idqp_full_dynamic_leg_only(
         roll=roll_cur, roll_rate=rolldot_cur,
         pitch=current_pitch,
         tau_spring_nv=tau_spring_nv,
+        tau_hip_spring_nv=tau_hip_spring_nv,
+        tau_hip_grav_nv=tau_hip_grav_nv,
         w_tau_vec=w_tau_vec,
     )
 
@@ -680,8 +831,8 @@ if __name__ == "__main__":
             q_ref_actuated[i] = q[iv_to_iq[iv]]
 
         tau_override = {
-            "left_hip_joint": 40.0, "right_hip_joint": 40.0,
-            "left_knee_joint": 20.0, "right_knee_joint": 20.0,
+            "left_hip_joint":   40.0, "right_hip_joint":  40.0,
+            "left_knee_joint":  20.0, "right_knee_joint": 20.0,
         }
         wheel_ddq_meas = {"left_wheel_joint": 0.0, "right_wheel_joint": 0.0}
 
@@ -702,10 +853,11 @@ if __name__ == "__main__":
             w_posture=20.0,
             w_roll_slack=1e4,
             use_dyn_slack=True,
-            w_dyn_slack=1e4,
+            w_dyn_slack=500.0,              # ← lowered
             wheel_ddq_mode="soft",
             wheel_ddq_meas=wheel_ddq_meas,
             w_wheel_ddq=1e3,
+            # Knee spring
             knee_spring_k=0.5,
             knee_spring_b=0.3,
             knee_spring_q0_left=knee_init_angle,
@@ -713,16 +865,27 @@ if __name__ == "__main__":
             knee_tau_scale=5.0,
             hip_tau_scale=1.0,
             posture_qdd_clip=200.0,
+            # NEW: Hip spring — provides baseline hip torque at equilibrium
+            hip_spring_k=2.0,
+            hip_spring_b=0.3,
+            hip_spring_q0_left=hip_init_angle,
+            hip_spring_q0_right=hip_init_angle,
+            hip_spring_sign_left=1.0,
+            hip_spring_sign_right=1.0,
+            # NEW: Hip gravity compensation (0.6 = 60% of grav comp injected as FF)
+            hip_grav_comp_scale=0.6,
         )
 
         np.set_printoptions(suppress=True, formatter={'float_kind': '{:.4f}'.format})
         print("\n=== ID-QP (leg-only, no pitch task) ===")
-        print("Joints    :", out["actuated_names"])
-        print("tau (Nm)  :", out["tau"])
-        print("w_tau_vec :", out["w_tau_vec"])
-        print("pitch     :", out["pitch"])
-        print("dyn_res   :", float(np.linalg.norm(out["dyn_res"])))
-        print("roll_res  :", float(np.linalg.norm(out["roll_res"])))
+        print("Joints            :", out["actuated_names"])
+        print("tau (Nm)          :", out["tau"])
+        print("w_tau_vec         :", out["w_tau_vec"])
+        print("pitch             :", out["pitch"])
+        print("tau_hip_spring_ff :", out["tau_hip_spring_nv"])
+        print("tau_hip_grav_ff   :", out["tau_hip_grav_nv"])
+        print("dyn_res           :", float(np.linalg.norm(out["dyn_res"])))
+        print("roll_res          :", float(np.linalg.norm(out["roll_res"])))
 
     except Exception as e:
         print(f"Error: {e}")
