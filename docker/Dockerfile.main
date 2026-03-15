@@ -84,8 +84,20 @@ RUN curl -fsSL https://packages.osrfoundation.org/gazebo.gpg \
     rm -rf /var/lib/apt/lists/*
 
 # ========== Python deps ==========
-RUN pip3 install --no-cache-dir --break-system-packages --ignore-installed \
-    sympy transforms3d pyproj matplotlib evdev pandas "numpy<2" pin "osqp>=0.6.3"
+RUN apt-get update && apt-get install -y python3-matplotlib && rm -rf /var/lib/apt/lists/*
+
+RUN pip3 install --no-cache-dir --break-system-packages \
+    sympy \
+    transforms3d \
+    pyproj \
+    evdev \
+    pandas \
+    "numpy<2" \
+    "osqp>=0.6.3" \
+    ultralytics
+
+RUN apt-get update && apt-get install -y \
+    ros-${ROS_DISTRO}-pointcloud-to-laserscan
 
 # ========== CycloneDDS ==========
 ENV RMW_IMPLEMENTATION=rmw_cyclonedds_cpp

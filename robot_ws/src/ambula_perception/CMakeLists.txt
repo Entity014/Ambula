@@ -17,49 +17,63 @@ find_package(geometry_msgs REQUIRED)
 find_package(std_msgs REQUIRED)
 find_package(visualization_msgs REQUIRED)
 find_package(pcl_conversions REQUIRED)
-find_package(PCL REQUIRED COMPONENTS common io filters segmentation sample_consensus)
+find_package(pcl_ros REQUIRED) 
+find_package(PCL REQUIRED COMPONENTS common io filters)
 find_package(tf2_ros REQUIRED)
 find_package(tf2_eigen REQUIRED)
 find_package(Eigen3 REQUIRED)
 find_package(OpenCV REQUIRED)
 find_package(cv_bridge REQUIRED)
 
+# --- Include Directories ---
 include_directories(
   include
   ${PCL_INCLUDE_DIRS}
-  ${EIGEN3_INCLUDE_DIRS}
   ${OpenCV_INCLUDE_DIRS}
 )
 
-link_directories(${PCL_LIBRARY_DIRS})
 add_definitions(${PCL_DEFINITIONS})
 
-# --- opening_detector node ---
+# --- 1. opening_detector node (ตัวเดิมของคุณ) ---
 add_executable(opening_detector
   src/opening_detection.cpp
 )
-
 ament_target_dependencies(opening_detector
-  rclcpp
-  sensor_msgs
-  geometry_msgs
-  std_msgs
-  visualization_msgs
-  pcl_conversions
-  tf2_ros
-  tf2_eigen
-  cv_bridge
+  rclcpp sensor_msgs geometry_msgs std_msgs visualization_msgs 
+  pcl_conversions pcl_ros tf2_ros tf2_eigen cv_bridge
 )
-
 target_link_libraries(opening_detector
   ${PCL_LIBRARIES}
   ${OpenCV_LIBS}
   Eigen3::Eigen
 )
 
+# --- 2. gap_detector node (ตัวใหม่ที่คุณเขียนมา) ---
+add_executable(gap_detector
+  src/gap_detector.cpp
+)
+ament_target_dependencies(gap_detector
+  rclcpp
+  sensor_msgs
+  visualization_msgs
+  pcl_conversions
+  pcl_ros
+)
+target_link_libraries(gap_detector
+  ${PCL_LIBRARIES}
+)
+
 # --- Installation ---
 install(TARGETS
   opening_detector
+  gap_detector
+  DESTINATION lib/${PROJECT_NAME}
+)
+
+install(PROGRAMS
+  script/depth_perception.py
+  script/person_detection.py
+  script/hole_detection.py
   DESTINATION lib/${PROJECT_NAME}
 )
 

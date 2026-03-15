@@ -22,11 +22,14 @@ def generate_launch_description():
             'enable_gyro': 'true',
             'unite_imu_method': '2', 
             'enable_sync': 'true',
+            'enable_color': 'true',         # เพิ่ม: เพื่อใช้ในการ Label และ Debug
+            'align_depth.enable': 'true',   # เพิ่ม: หัวใจสำคัญของการทำ Person Detection คู่กับ Depth
             'enable_infra1': 'true',
             'enable_infra2': 'true',
-            'ordered_pc': 'true', # สำคัญ: ทำให้ PointCloud เป็นระเบียบช่วย Voxel Layer
+            'ordered_pc': 'true',
             'pointcloud.enable': 'true',
             'depth_module.profile': '640x480x30',
+            'rgb_module.profile': '640x480x30',   # เพิ่ม: กำหนดขนาดภาพสีให้เท่ากับ Depth
             'infra_module.profile': '640x480x30',
             'publish_tf': 'true',
         }.items()
@@ -88,10 +91,28 @@ def generate_launch_description():
         }.items()
     )
 
+    depth2laser_node = Node(
+        package='depthimage_to_laserscan',
+        executable='depthimage_to_laserscan_node',
+        name='depthimage_to_laserscan',
+        remappings=[
+            ('depth', '/camera/camera/depth/image_rect_raw'),
+            ('depth_camera_info', '/camera/camera/depth/camera_info'),
+            ('scan', '/scan')
+        ],
+        parameters=[{
+            'scan_height': 10, # ใช้กี่แถวของภาพมาสร้าง scan
+            'output_frame': 'camera_link',
+            'range_min': 0.3,
+            'range_max': 3.0
+        }]
+    )
+
     return LaunchDescription([
         included_realsense,
         imu_filter_node,
         static_tf,
+        depth2laser_node,
         # rtabmap_odom_node,
         # nav2_nodes
     ])

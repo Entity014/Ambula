@@ -5,8 +5,8 @@ from scipy.interpolate import make_interp_spline
 
 # 1. Load data from CSV files
 # เปลี่ยน path ให้ตรงกับตำแหน่งไฟล์ของคุณ
-df_up = pd.read_csv('/home/xero/Ambula/robot_ws/src/ambula_controller/ambula_cal/Data/Data - 8deg_up.csv')
-df_down = pd.read_csv('/home/xero/Ambula/robot_ws/src/ambula_controller/ambula_cal/Data/Data - 8deg_down.csv')
+df_up = pd.read_csv('/home/xero/Ambula/robot_ws/src/ambula_controller/ambula_cal/Data/Data - 13deg_up.csv')
+df_down = pd.read_csv('/home/xero/Ambula/robot_ws/src/ambula_controller/ambula_cal/Data/Data - 13deg_down.csv')
 
 # Clean data: ลบแถวที่ไม่มีข้อมูลความเร็ว
 df_up = df_up.dropna(subset=['ความเร็ว'])
@@ -62,7 +62,7 @@ plt.xticks(np.arange(0, 11, 1))
 plt.yticks(np.arange(0, 1.1, 0.1))
 
 plt.legend(loc='upper right', frameon=True, edgecolor='black', fontsize=10)
-plt.title('Velocity Performance Test (8° Slope)', fontsize=14)
+plt.title('Velocity Performance Test (13° Slope)', fontsize=14)
 
 plt.tight_layout()
 plt.show()

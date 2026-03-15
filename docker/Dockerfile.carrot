@@ -62,7 +62,10 @@ RUN apt-get update && apt-get install -y \
     ros-${ROS_DISTRO}-pcl-ros \
     ros-${ROS_DISTRO}-pcl-conversions \
     ros-${ROS_DISTRO}-cv-bridge \ 
-    ros-${ROS_DISTRO}-vision-opencv 
+    ros-${ROS_DISTRO}-vision-opencv \
+    # --- RealSense ROS wrapper (ไม่ต้อง dkms ใน container) ---
+    ros-${ROS_DISTRO}-librealsense2* \
+    ros-${ROS_DISTRO}-realsense2-* 
 
 
 WORKDIR /home
