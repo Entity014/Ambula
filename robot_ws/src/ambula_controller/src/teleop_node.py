@@ -1,13 +1,14 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
+import math
 import rclpy
 from rclpy.node import Node
 from rclpy.qos import QoSProfile, ReliabilityPolicy, HistoryPolicy
 
 from sensor_msgs.msg import Joy
 from geometry_msgs.msg import Twist
-from std_msgs.msg import Int8
+from std_msgs.msg import Int8, Bool, Float32
 
 
 def apply_deadzone(x: float, dz: float) -> float:
@@ -30,6 +31,22 @@ class JoyToCmdVel(Node):
         self.declare_parameter("robot_state_topic", "/robot/state")
         self.declare_parameter("payload_state_topic", "/payload/state")
         self.declare_parameter("led_state_topic", "/led/state")
+
+        # ── Wall-proximity guard ──────────────────────────────────────────────
+        # Sub topics from opening_detector:
+        #   estop_topic    : Bool    — false=GO(PASS), true=stop(CROUCH/BLOCKED/WALL)
+        #   distance_topic : Float32 — distance to detected wall plane [m]
+        #
+        # Guard logic (same for CROUCH, BLOCKED, and WALL):
+        #   estop=false                          → no restriction
+        #   estop=true  AND dist > wall_stop_distance → no restriction (still far)
+        #   estop=true  AND dist <= wall_stop_distance → block linear.x > 0
+        #
+        # Reverse (linear.x < 0) and rotation (angular.z) always allowed.
+        self.declare_parameter("estop_topic",         "/opening_detection/estop")
+        self.declare_parameter("distance_topic",      "/opening_detection/wall_distance")
+        self.declare_parameter("wall_stop_distance",  0.5)   # [m] — full stop threshold
+        self.declare_parameter("wall_slowdown_distance", 1.5) # [m] — begin slowing down here
 
         # =============================
         # cmd_vel mapping
@@ -79,7 +96,7 @@ class JoyToCmdVel(Node):
         self.declare_parameter("x_btn2", 2)
 
         self.declare_parameter("y_trigger_btn", 3)
-        self.declare_parameter("y_pulse_duration_ms", 120.0)  # Pulse duration in ms
+        self.declare_parameter("y_pulse_duration_ms", 120.0)
 
         self.declare_parameter("z_cycle_btn", 6)
 
@@ -95,42 +112,65 @@ class JoyToCmdVel(Node):
             reliability=ReliabilityPolicy.RELIABLE,
         )
 
-        joy_topic = self.get_parameter("joy_topic").value
-        cmd_vel_topic = self.get_parameter("cmd_vel_topic").value
-        robot_state_topic = self.get_parameter("robot_state_topic").value
+        joy_topic          = self.get_parameter("joy_topic").value
+        cmd_vel_topic      = self.get_parameter("cmd_vel_topic").value
+        robot_state_topic  = self.get_parameter("robot_state_topic").value
         payload_state_topic = self.get_parameter("payload_state_topic").value
-        led_state_topic = self.get_parameter("led_state_topic").value
+        led_state_topic    = self.get_parameter("led_state_topic").value
+        estop_topic        = self.get_parameter("estop_topic").value
+        distance_topic     = self.get_parameter("distance_topic").value
 
-        self.pub_cmd = self.create_publisher(Twist, cmd_vel_topic, qos_cmd)
-        self.pub_robot_state = self.create_publisher(Int8, robot_state_topic, qos_cmd)
+        self.pub_cmd          = self.create_publisher(Twist, cmd_vel_topic, qos_cmd)
+        self.pub_robot_state  = self.create_publisher(Int8, robot_state_topic, qos_cmd)
         self.pub_payload_state = self.create_publisher(Int8, payload_state_topic, qos_cmd)
-        self.pub_led_state = self.create_publisher(Int8, led_state_topic, qos_cmd)
+        self.pub_led_state    = self.create_publisher(Int8, led_state_topic, qos_cmd)
 
         self.sub_joy = self.create_subscription(Joy, joy_topic, self.on_joy, 10)
 
-        self.last_joy = None
+        # ── Wall-proximity guard subscribers ─────────────────────────────────
+        self._wall_estop    = False          # latest Bool from estop_topic
+        self._wall_distance = math.inf       # latest Float32 from distance_topic
+
+        if estop_topic:
+            self.create_subscription(
+                Bool, estop_topic,
+                lambda m: setattr(self, '_wall_estop', bool(m.data)),
+                10)
+
+        if distance_topic:
+            self.create_subscription(
+                Float32, distance_topic,
+                lambda m: setattr(self, '_wall_distance', float(m.data)),
+                10)
+
+        self.last_joy      = None
         self.last_joy_time = self.get_clock().now()
 
         # Internal States
-        h0 = float(self.get_parameter("height_default").value)
+        h0   = float(self.get_parameter("height_default").value)
         hmin = float(self.get_parameter("height_min").value)
         hmax = float(self.get_parameter("height_max").value)
         self.height_cmd = clamp(h0, hmin, hmax)
 
-        self._prev_up = False
+        self._prev_up   = False
         self._prev_down = False
 
         self.state_x = int(self.get_parameter("state_x_default").value)
         self.state_z = int(self.get_parameter("state_z_default").value)
 
-        # --- PULSE LOGIC FOR Y ---
         self.y_pulse_remaining_cycles = 0
         self._btn_prev = {}
 
         publish_hz = float(self.get_parameter("publish_hz").value)
         self.timer = self.create_timer(1.0 / publish_hz, self.on_timer)
 
-        self.get_logger().info(f"Node started. Pulse Y set to {self.get_parameter('y_pulse_duration_ms').value} ms")
+        self.get_logger().info(
+            f"Node started.\n"
+            f"  Wall guard  estop          : {estop_topic or '(disabled)'}\n"
+            f"  Wall guard  distance       : {distance_topic or '(disabled)'}\n"
+            f"  wall_slowdown_distance     : {self.get_parameter('wall_slowdown_distance').value} m\n"
+            f"  wall_stop_distance         : {self.get_parameter('wall_stop_distance').value} m"
+        )
 
     # ---------- helper ----------
     def _get_axis(self, joy: Joy, i: int) -> float:
@@ -150,14 +190,39 @@ class JoyToCmdVel(Node):
     def _rising(self, joy: Joy, btn_idx: int) -> bool:
         if btn_idx < 0:
             return False
-        now = (self._get_button(joy, btn_idx) == 1)
+        now  = (self._get_button(joy, btn_idx) == 1)
         prev = bool(self._btn_prev.get(btn_idx, False))
         self._btn_prev[btn_idx] = now
         return now and (not prev)
 
+    # ---------- wall guard ----------
+    def _wall_speed_scale(self) -> float:
+        """
+        Return a [0.0, 1.0] forward-speed multiplier based on wall distance.
+
+          estop=false                              → 1.0  (no restriction)
+          estop=true, dist >= slowdown_distance    → 1.0  (wall detected but far)
+          estop=true, stop_dist < dist < slowdown  → linear ramp 0.0 → 1.0
+          estop=true, dist <= stop_distance        → 0.0  (full stop)
+        """
+        if not self._wall_estop:
+            return 1.0
+
+        stop_dist     = float(self.get_parameter("wall_stop_distance").value)
+        slowdown_dist = float(self.get_parameter("wall_slowdown_distance").value)
+        dist          = self._wall_distance
+
+        if dist <= stop_dist:
+            return 0.0
+        if dist >= slowdown_dist:
+            return 1.0
+
+        # linear ramp between stop_dist and slowdown_dist
+        return (dist - stop_dist) / (slowdown_dist - stop_dist)
+
     # ---------- callbacks ----------
     def on_joy(self, msg: Joy):
-        self.last_joy = msg
+        self.last_joy      = msg
         self.last_joy_time = self.get_clock().now()
         self._update_height_from_dpad(msg)
         self._update_robot_state(msg)
@@ -167,21 +232,25 @@ class JoyToCmdVel(Node):
         if require_enable and (not self._enabled(joy)):
             return
 
-        hmin, hmax = float(self.get_parameter("height_min").value), float(self.get_parameter("height_max").value)
-        step = float(self.get_parameter("height_step").value)
-        thr, invert = float(self.get_parameter("dpad_threshold").value), bool(self.get_parameter("invert_dpad_axis").value)
-        up_btn, down_btn = int(self.get_parameter("dpad_up_button").value), int(self.get_parameter("dpad_down_button").value)
+        hmin  = float(self.get_parameter("height_min").value)
+        hmax  = float(self.get_parameter("height_max").value)
+        step  = float(self.get_parameter("height_step").value)
+        thr   = float(self.get_parameter("dpad_threshold").value)
+        invert = bool(self.get_parameter("invert_dpad_axis").value)
+        up_btn   = int(self.get_parameter("dpad_up_button").value)
+        down_btn = int(self.get_parameter("dpad_down_button").value)
         dpad_axis = int(self.get_parameter("dpad_vertical_axis").value)
 
         if up_btn >= 0 or down_btn >= 0:
-            up_now = (self._get_button(joy, up_btn) == 1)
+            up_now   = (self._get_button(joy, up_btn) == 1)
             down_now = (self._get_button(joy, down_btn) == 1)
         else:
             y = self._get_axis(joy, dpad_axis)
-            if invert: y = -y
+            if invert:
+                y = -y
             up_now, down_now = (y > thr), (y < -thr)
 
-        if up_now and not self._prev_up: self.height_cmd = clamp(self.height_cmd + step, hmin, hmax)
+        if up_now   and not self._prev_up:   self.height_cmd = clamp(self.height_cmd + step, hmin, hmax)
         if down_now and not self._prev_down: self.height_cmd = clamp(self.height_cmd - step, hmin, hmax)
 
         self._prev_up, self._prev_down = up_now, down_now
@@ -190,33 +259,29 @@ class JoyToCmdVel(Node):
         if bool(self.get_parameter("require_enable_for_state_change").value) and (not self._enabled(joy)):
             return
 
-        # State X logic
         for i in range(3):
             if self._rising(joy, int(self.get_parameter(f"x_btn{i}").value)):
                 self.state_x = i
 
-        # --- PULSE Y LOGIC ---
         y_btn = int(self.get_parameter("y_trigger_btn").value)
         if self._rising(joy, y_btn):
-            hz = float(self.get_parameter("publish_hz").value)
+            hz          = float(self.get_parameter("publish_hz").value)
             duration_ms = float(self.get_parameter("y_pulse_duration_ms").value)
-            # Calculate cycles: (ms / 1000) * hz
             self.y_pulse_remaining_cycles = int((duration_ms / 1000.0) * hz)
-            if self.y_pulse_remaining_cycles < 1: self.y_pulse_remaining_cycles = 1
+            if self.y_pulse_remaining_cycles < 1:
+                self.y_pulse_remaining_cycles = 1
             self.get_logger().info(f"Y Pulse Triggered: {duration_ms}ms")
 
-        # State Z logic
         if self._rising(joy, int(self.get_parameter("z_cycle_btn").value)):
             self.state_z = (self.state_z + 1) % 2
 
     def _publish_state(self):
-        robot_msg = Int8()
+        robot_msg   = Int8()
         payload_msg = Int8()
-        led_msg = Int8()
+        led_msg     = Int8()
         robot_msg.data = int(self.state_x)
-        led_msg.data = int(self.state_z)
+        led_msg.data   = int(self.state_z)
 
-        # Pulse Y output logic
         if self.y_pulse_remaining_cycles > 0:
             payload_msg.data = 1
             self.y_pulse_remaining_cycles -= 1
@@ -228,9 +293,9 @@ class JoyToCmdVel(Node):
         self.pub_led_state.publish(led_msg)
 
     def on_timer(self):
-        now = self.get_clock().now()
+        now     = self.get_clock().now()
         timeout = float(self.get_parameter("joy_timeout_sec").value)
-        cmd = Twist()
+        cmd     = Twist()
 
         if bool(self.get_parameter("publish_height_always").value):
             cmd.linear.z = float(self.height_cmd)
@@ -247,22 +312,50 @@ class JoyToCmdVel(Node):
             self.pub_cmd.publish(cmd)
             return
 
-        # Linear/Angular logic
-        lin = apply_deadzone(self._get_axis(joy, int(self.get_parameter("axis_linear").value)), float(self.get_parameter("deadzone").value))
-        ang = apply_deadzone(self._get_axis(joy, int(self.get_parameter("axis_angular").value)), float(self.get_parameter("deadzone").value))
-        
+        # Linear / Angular
+        lin = apply_deadzone(
+            self._get_axis(joy, int(self.get_parameter("axis_linear").value)),
+            float(self.get_parameter("deadzone").value))
+        ang = apply_deadzone(
+            self._get_axis(joy, int(self.get_parameter("axis_angular").value)),
+            float(self.get_parameter("deadzone").value))
+
         scale_lin = float(self.get_parameter("scale_linear").value)
         scale_ang = float(self.get_parameter("scale_angular").value)
 
-        if bool(self.get_parameter("use_turbo").value) and (self._get_button(joy, int(self.get_parameter("turbo_button").value)) == 1):
-            mul = float(self.get_parameter("turbo_multiplier").value)
+        if bool(self.get_parameter("use_turbo").value) and \
+                (self._get_button(joy, int(self.get_parameter("turbo_button").value)) == 1):
+            mul        = float(self.get_parameter("turbo_multiplier").value)
             scale_lin *= mul
             scale_ang *= mul
 
-        cmd.linear.x = scale_lin * lin
+        cmd.linear.x  = scale_lin * lin
         cmd.angular.z = scale_ang * ang
+
         if not bool(self.get_parameter("publish_height_always").value):
             cmd.linear.z = float(self.height_cmd)
+
+        # ── Wall-proximity guard ──────────────────────────────────────────────
+        # Scale forward speed linearly from 1.0 → 0.0 as wall approaches.
+        #   dist >= wall_slowdown_distance  → full speed
+        #   wall_stop_distance < dist < wall_slowdown_distance → ramp down
+        #   dist <= wall_stop_distance      → full stop (0.0)
+        # Reverse (linear.x < 0) and rotation (angular.z) always unaffected.
+        if cmd.linear.x > 0.0:
+            scale = self._wall_speed_scale()
+            if scale < 1.0:
+                cmd.linear.x *= scale
+                if scale == 0.0:
+                    self.get_logger().warn(
+                        f"Wall guard: STOP "
+                        f"(dist={self._wall_distance:.2f}m <= "
+                        f"{self.get_parameter('wall_stop_distance').value}m)",
+                        throttle_duration_sec=1.0)
+                else:
+                    self.get_logger().info(
+                        f"Wall guard: slowing to {scale*100:.0f}% "
+                        f"(dist={self._wall_distance:.2f}m)",
+                        throttle_duration_sec=1.0)
 
         self.pub_cmd.publish(cmd)
 

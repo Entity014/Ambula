@@ -71,12 +71,17 @@ RUN apt-get update && apt-get install -y \
 WORKDIR /home
 
 # Python dependencies
-RUN python3 -m pip install -U --break-system-packages pip setuptools wheel
+RUN python3 -m pip install -U --break-system-packages --ignore-installed pip setuptools wheel
+
 RUN python3 -m pip install --no-cache-dir --break-system-packages --ignore-installed \
     "numpy<2" \
     "scipy==1.11.4" --only-binary=scipy \
     osqp qdldl \
     sympy transforms3d pyproj matplotlib evdev pandas onnxruntime pin
+
+RUN apt-get update && apt-get install -y \
+    ros-${ROS_DISTRO}-pointcloud-to-laserscan \
+    ros-${ROS_DISTRO}-depthimage-to-laserscan
 
 # Set CycloneDDS
 ENV RMW_IMPLEMENTATION=rmw_cyclonedds_cpp

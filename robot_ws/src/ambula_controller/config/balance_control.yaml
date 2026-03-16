@@ -12,9 +12,17 @@ wbc_node:
     # State Source
     # ======================================================
     state_source: "ekf"
-    odom_topic: "/odom"
-    imu_topic: "/imu/data_raw"
+    odom_topic:   "/odom"
+    imu_topic:    "/imu/data_raw"
     raw_zero_gyro_z: false
+
+    # ======================================================
+    # Topics
+    # ======================================================
+    cmd_vel_topic:        "/cmd_vel"
+    joint_states_topic:   "/joint_states/hardware"
+    cmd_joint_topic:      "/cmd_joint"
+    height_current_topic: "/ambula/height"
 
     # ======================================================
     # WBC Weights
@@ -59,7 +67,7 @@ wbc_node:
     hip_tau_scale:   1.0    # keep low — we WANT hip torque
     waist_tau_scale: 5.0
 
-    posture_qdd_clip: 400.0  # ↑ allow largewr qdd_des so PD drives bigger torque
+    posture_qdd_clip: 400.0  # ↑ allow larger qdd_des so PD drives bigger torque
 
     # ======================================================
     # Robustness
@@ -83,7 +91,7 @@ wbc_node:
     knee_spring_sign_right: 1.0
 
     # ======================================================
-    # NEW: Hip Spiral Torsion Spring (feed-forward)
+    # Hip Spiral Torsion Spring (feed-forward)
     # Provides baseline τ_hip even when posture error ≈ 0.
     # Set q0 to your actual standing hip angle.
     # Start with k=2.0 and tune upward if hip τ is still low.
@@ -96,7 +104,7 @@ wbc_node:
     hip_spring_sign_right: 1.0
 
     # ======================================================
-    # NEW: Hip Gravity Compensation (feed-forward)
+    # Hip Gravity Compensation (feed-forward)
     # Injects scale * g[hip_iv] into the dynamics RHS so the
     # solver must produce at least this much hip torque.
     # 0.0 = off | 0.5–0.8 = recommended | 1.0 = full grav comp

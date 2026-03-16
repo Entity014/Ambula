@@ -1,15 +1,21 @@
 import os
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
-from launch.actions import IncludeLaunchDescription
+from launch.actions import IncludeLaunchDescription, TimerAction, ExecuteProcess
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch_ros.actions import Node
+from launch_ros.substitutions import FindPackageShare
+from launch.substitutions import PathJoinSubstitution
+
 
 def generate_launch_description():
     pkg_dir = get_package_share_directory('ambula_perception')
     nav2_params_path = os.path.join(pkg_dir, 'config', 'nav2_local_params.yaml')
     realsense_dir = get_package_share_directory('realsense2_camera')
     nav2_bringup_dir = get_package_share_directory('nav2_bringup')
+    detection_config_path = PathJoinSubstitution(
+        [FindPackageShare("ambula_perception"), "config", "detection.yaml"]
+    )
 
     # 1. RealSense
     included_realsense = IncludeLaunchDescription(
@@ -20,17 +26,19 @@ def generate_launch_description():
             'camera_name': 'camera',
             'enable_accel': 'true',
             'enable_gyro': 'true',
-            'unite_imu_method': '2', 
-            'enable_sync': 'true',
-            'enable_color': 'true',         # เพิ่ม: เพื่อใช้ในการ Label และ Debug
-            'align_depth.enable': 'true',   # เพิ่ม: หัวใจสำคัญของการทำ Person Detection คู่กับ Depth
-            'enable_infra1': 'true',
-            'enable_infra2': 'true',
-            'ordered_pc': 'true',
-            'pointcloud.enable': 'true',
-            'depth_module.profile': '640x480x30',
-            'rgb_module.profile': '640x480x30',   # เพิ่ม: กำหนดขนาดภาพสีให้เท่ากับ Depth
-            'infra_module.profile': '640x480x30',
+            'unite_imu_method': '2',
+            'enable_sync': 'false',
+            'enable_color': 'true',        
+            'align_depth.enable': 'false', 
+            'enable_infra1': 'false',       
+            'enable_infra2': 'false',     
+            'pointcloud.enable': 'true',   
+            'ordered_pc': 'false',
+            'depth_module.depth_profile': '640x480x15',    # ลด fps 30→15 ช่วย CPU มาก
+            'rgb_camera.color_profile': '640x480x15',
+            'infra_module.profile': '640x480x15',
+            'decimation_filter.enable': 'true',
+            'decimation_filter.filter_magnitude': '4',  # ลด 4x, ใส่ 4 ลดได้ 16x
             'publish_tf': 'true',
         }.items()
     )
@@ -47,8 +55,7 @@ def generate_launch_description():
         ]
     )
 
-    # 3. Static TF (หัวใจสำคัญ: เชื่อม base_link เข้ากับโครงสร้างกล้อง)
-    # จากภาพของคุณ odom และ base_link แยกกันอยู่ เราต้องจับ base_link ไปต่อกับ camera_link
+    # 3. Static TF
     static_tf = Node(
         package='tf2_ros',
         executable='static_transform_publisher',
@@ -69,10 +76,9 @@ def generate_launch_description():
             'subscribe_imu': True,
             'wait_imu_to_init': True,
             'approx_sync': True,
-            'wait_for_transform': 0.5, # เพิ่มเผื่อไว้กัน Error TF ที่เจอเมื่อกี้
+            'wait_for_transform': 0.5,
         }],
         remappings=[
-            # เปลี่ยนจาก image_raw เป็น image_rect_raw ตามรูป
             ('rgb/image', '/camera/camera/infra1/image_rect_raw'),
             ('depth/image', '/camera/camera/depth/image_rect_raw'),
             ('rgb/camera_info', '/camera/camera/infra1/camera_info'),
@@ -101,18 +107,47 @@ def generate_launch_description():
             ('scan', '/scan')
         ],
         parameters=[{
-            'scan_height': 10, # ใช้กี่แถวของภาพมาสร้าง scan
+            'scan_height': 10,
             'output_frame': 'camera_link',
             'range_min': 0.3,
             'range_max': 3.0
         }]
     )
 
+    # 5. หน่วงเวลา 5 วิ รอ realsense node ขึ้นก่อน แล้วค่อย set param
+    #    เพราะ launch_arguments ไม่สามารถส่งชื่อที่มี __ ได้ใน ROS2
+    set_pointcloud_enable = ExecuteProcess(
+        cmd=['ros2', 'param', 'set', '/camera/camera',
+             'pointcloud__neon_.enable', 'true'],
+        output='screen'
+    )
+
+    set_pointcloud_ordered = ExecuteProcess(
+        cmd=['ros2', 'param', 'set', '/camera/camera',
+             'pointcloud__neon_.ordered_pc', 'false'],
+        output='screen'
+    )
+
+    delayed_pointcloud_params = TimerAction(
+        period=10.0,
+        actions=[set_pointcloud_enable, set_pointcloud_ordered]
+    )
+
+    node_detection = Node(
+        package="ambula_perception",
+        executable="opening_detector",
+        name="opening_detector",
+        parameters=[{detection_config_path}],
+        output="screen",
+    )
+
     return LaunchDescription([
         included_realsense,
         imu_filter_node,
         static_tf,
-        depth2laser_node,
+        delayed_pointcloud_params,
+        node_detection,
+        # depth2laser_node,
         # rtabmap_odom_node,
         # nav2_nodes
     ])

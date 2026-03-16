@@ -1,75 +1,69 @@
 teleop_node:
   ros__parameters:
-    # -----------------------------
-    # Topics
-    # -----------------------------
-    joy_topic: "/joy"
-    cmd_vel_topic: "/cmd_vel"
-    robot_state_topic: "/robot/state"
+
+    # ── Topics ────────────────────────────────────────────────────────────────
+    joy_topic:           "/joy"
+    cmd_vel_topic:       "/cmd_vel"
+    robot_state_topic:   "/robot/state"
     payload_state_topic: "/payload/state"
-    led_state_topic: "/led/state"
+    led_state_topic:     "/led/state"
 
-    use_enable_button: false # false = ไม่ต้องกดปุ่ม enable
-    use_turbo: false # false = ปิด turbo
+    # ── Wall-proximity guard ───────────────────────────────────────────────────
+    # dist >= wall_slowdown_distance  → full speed
+    # wall_stop_distance < dist < wall_slowdown_distance → ramp down linear
+    # dist <= wall_stop_distance      → full stop
+    # ถอยหลัง / หันได้เสมอ
+    estop_topic:             "/opening_detection/estop"
+    distance_topic:          "/opening_detection/wall_distance"
+    wall_slowdown_distance:  1.5   # [m] เริ่มชะลอตั้งแต่ระยะนี้
+    wall_stop_distance:      0.75   # [m] หยุดสนิท
 
-    # -----------------------------
-    # cmd_vel mapping
-    # -----------------------------
-    axis_linear: 1
-    axis_angular: 2
-    scale_linear: 0.75
+    # ── Enable / Turbo ────────────────────────────────────────────────────────
+    use_enable_button: false
+    use_turbo:         false
+
+    enable_button:     4
+    turbo_button:      5
+    turbo_multiplier:  2.0
+
+    # ── cmd_vel mapping ───────────────────────────────────────────────────────
+    axis_linear:   1
+    axis_angular:  2
+    scale_linear:  0.75
     scale_angular: 1.5
-    deadzone: 0.05
+    deadzone:      0.05
 
-    # Deadman / Turbo
-    enable_button: 4
-    turbo_button: 5
-    turbo_multiplier: 2.0
-
-    publish_hz: 50.0
+    publish_hz:      50.0
     joy_timeout_sec: 0.25
 
-    # -----------------------------
-    # Height command via cmd_vel.linear.z (D-pad up/down)
-    # -----------------------------
-    height_min: 0.35
-    height_max: 0.50
+    # ── Height command (cmd_vel.linear.z) ─────────────────────────────────────
+    height_min:     0.35
+    height_max:     0.45
     height_default: 0.35
-    height_step: 0.01
+    height_step:    0.05
 
-    # D-pad vertical: ใช้ axis เป็นหลัก (หลายจอยจะเป็นแกน 7)
     dpad_vertical_axis: -1
-    dpad_threshold: 0.5
-    invert_dpad_axis: false
+    dpad_threshold:     0.5
+    invert_dpad_axis:   false
 
-    # ถ้า D-pad ของคุณมาเป็นปุ่ม ให้ตั้ง index ปุ่มแทน (ไม่งั้นปล่อย -1)
-    dpad_up_button: 11
+    dpad_up_button:   11
     dpad_down_button: 12
 
     require_enable_for_height_change: true
-    publish_height_always: true
+    publish_height_always:            true
 
-    # -----------------------------
-    # Robot state (/robot/state) Vector3: x,y,z
-    #   x = 0..2  (3 buttons)
-    #   y = 0/1   (one-shot trigger; กดค้างไม่ยิงซ้ำ)
-    #   z = 0..2  (one button cycles)
-    # -----------------------------
-    publish_state_always: true
+    # ── Robot state ───────────────────────────────────────────────────────────
+    publish_state_always:            true
     require_enable_for_state_change: true
 
-    # x state buttons (กดครั้งเดียว set state)
     x_btn0: 2
     x_btn1: 3
     x_btn2: 1
 
-    # y trigger button (one-shot)
-    y_trigger_btn: 0
+    y_trigger_btn:       0
     y_pulse_duration_ms: 100.0
 
-    # z cycle button (0->1->0)
     z_cycle_btn: 4
 
-    # default states
     state_x_default: 0
     state_z_default: 0

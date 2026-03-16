@@ -10,6 +10,7 @@ import inspect
 from sensor_msgs.msg import JointState, Imu
 from nav_msgs.msg import Odometry
 from geometry_msgs.msg import Twist
+from std_msgs.msg import Float32
 
 from ambula_controller.wbc_core import (
     load_model,
@@ -98,9 +99,13 @@ class AmbulaWBCNode(Node):
 
         # --- State source ---
         self.declare_parameter('state_source', 'ekf')  # 'ekf' or 'raw'
-        self.declare_parameter('odom_topic', '/odom')
-        self.declare_parameter('imu_topic', '/imu/data_raw')
-        self.declare_parameter('raw_zero_gyro_z', False)
+        self.declare_parameter('odom_topic',           '/odom')
+        self.declare_parameter('imu_topic',            '/imu/data_raw')
+        self.declare_parameter('raw_zero_gyro_z',      False)
+        self.declare_parameter('cmd_vel_topic',        '/cmd_vel')
+        self.declare_parameter('joint_states_topic',   '/joint_states/hardware')
+        self.declare_parameter('cmd_joint_topic',      '/cmd_joint')
+        self.declare_parameter('height_current_topic', '/wbc/height_current')
 
         # WBC Weights / Gains
         self.declare_parameter('weight_height',  60.0)
@@ -245,10 +250,16 @@ class AmbulaWBCNode(Node):
             self.sub_imu = None
             self.get_logger().info(f"[WBC] state_source=ekf | odom={self.odom_topic} (IMU topic not used in WBC)")
 
-        self.sub_cmd_vel = self.create_subscription(Twist, '/cmd_vel', self.cmd_vel_callback, 20)
-        self.sub_joint_states = self.create_subscription(JointState, '/joint_states/hardware', self.joint_state_callback, 50)
+        cmd_vel_topic      = str(self.get_parameter('cmd_vel_topic').value)
+        joint_states_topic = str(self.get_parameter('joint_states_topic').value)
+        cmd_joint_topic    = str(self.get_parameter('cmd_joint_topic').value)
+        height_topic       = str(self.get_parameter('height_current_topic').value)
 
-        self.pub_joint_commands = self.create_publisher(JointState, '/cmd_joint', 10)
+        self.sub_cmd_vel      = self.create_subscription(Twist,      cmd_vel_topic,      self.cmd_vel_callback,     20)
+        self.sub_joint_states = self.create_subscription(JointState, joint_states_topic, self.joint_state_callback, 50)
+
+        self.pub_joint_commands = self.create_publisher(JointState, cmd_joint_topic, 10)
+        self.pub_height_current = self.create_publisher(Float32,    height_topic,    10)
         self.timer = self.create_timer(self.dt, self.control_loop)
 
     # ======================================================
@@ -372,6 +383,11 @@ class AmbulaWBCNode(Node):
             true_base_height = (base_z_kin - wheel_z_kin) + wheel_radius
         except Exception:
             true_base_height = 0.0
+
+        # ── Publish current height ────────────────────────────────────────────
+        msg_height = Float32()
+        msg_height.data = float(true_base_height)
+        self.pub_height_current.publish(msg_height)
 
         z_ik_target = self.current_z_ref - wheel_radius - base_to_hip_z
 

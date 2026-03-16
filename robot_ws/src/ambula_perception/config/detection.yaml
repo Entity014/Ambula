@@ -1,0 +1,64 @@
+opening_detector:
+  ros__parameters:
+
+    # ── Voxel downsampling ─────────────────────────────────────────────────────
+    voxel_size: 0.04
+
+    # ── ROI filter (ROBOT frame: X=forward, Y=left, Z=up) ─────────────────────
+    pass_x_min: 0.4
+    pass_x_max: 3.0
+    pass_y_min: -0.5
+    pass_y_max:  0.5
+    pass_z_min: -0.5
+    pass_z_max:  1.0
+
+    # ── RANSAC plane segmentation ──────────────────────────────────────────────
+    ransac_dist: 0.03
+    max_plane_iters: 5
+    min_plane_inliers: 30
+
+    # ── Wall-plane filter ──────────────────────────────────────────────────────
+    max_wall_tilt: 0.3
+
+    # ── Occupancy grid ─────────────────────────────────────────────────────────
+    grid_res: 0.02
+
+    # ── Opening filter ─────────────────────────────────────────────────────────
+    min_open_area: 0.10
+    max_open_area: 5.00
+    min_open_w: 0.10
+    min_open_h: 0.10
+
+    # ── Robot body dimensions ──────────────────────────────────────────────────
+    # robot_width      : lateral clearance required to pass
+    # robot_height     : standing height (fallback before sub_robot_height arrives)
+    # robot_height_min : minimum crouching height — opening below this = BLOCKED
+    # safety_margin    : crouch_target = max(opening_h - safety_margin, robot_height_min)
+    robot_width:      0.45
+    robot_height:     0.40
+    robot_height_min: 0.40
+    safety_margin:    0.05
+
+    # ── Topic names ────────────────────────────────────────────────────────────
+    # SUB
+    input_topic:      "/camera/camera/depth/color/points"
+    sub_robot_height: "/ambula/height"
+
+    # PUB
+    pub_markers:       "/opening_detection/markers"
+    pub_roi_cloud:     "/opening_detection/roi_cloud"
+    pub_plane_cloud:   "/opening_detection/plane_cloud"
+    pub_estop:         "/opening_detection/estop"
+    pub_crouch_height: "/opening_detection/crouch_height"
+    pub_wall_distance: "/opening_detection/wall_distance"
+
+    # ── Logging ────────────────────────────────────────────────────────────────
+    # log_latency            : true  → log msg→cb latency, process time, total
+    #                          false → silent
+    # log_latency_throttle_ms: throttle interval in milliseconds
+    log_latency:             false
+    log_latency_throttle_ms: 1000
+
+    pass_confirm_frames: 3   # ต้องเห็น PASS กี่ frame ติดกันถึง set latch
+    pass_decay_frames:  5    # ใช้ใน log เท่านั้น (decay ทีละ 1 ต่อ frame)
+    pass_latch_timeout: 3.0  # วินาที — clear latch ถ้าค้างนานเกิน
